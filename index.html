@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Exam Engine Pro</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+
+<div class="app-container">
+  <main class="main-content">
+    
+    <div id="home" class="card home-card">
+      <h1 class="hero-title">📘 Exam Engine Pro</h1>
+      
+      <div class="action-grid">
+        <div class="action-card">
+          <h3>🆕 Start New</h3>
+          <label for="fileInput" class="custom-file-upload"><span id="fileNameDisplay">📁 Select Quiz JSONs</span></label>
+          <input type="file" id="fileInput" accept=".json" multiple onchange="updateFileName(this, 'fileNameDisplay')">
+          
+          <div class="settings-group">
+             <div class="input-row">
+                <div class="input-wrap"><label>Marks (+)</label><input type="number" id="markInput" placeholder="Def" step="0.1"></div>
+                <div class="input-wrap"><label>Penalty (-)</label><input type="number" id="negInput" placeholder="Def" step="0.1"></div>
+             </div>
+             <div class="input-row"><div class="input-wrap"><label>Max Questions</label><input type="number" id="limitInput" placeholder="All" min="1"></div></div>
+             <div class="checkbox-wrapper center-check"><input type="checkbox" id="shuffleToggle"><label for="shuffleToggle">🔀 Shuffle</label></div>
+          </div>
+          <button class="btn btn-primary btn-full btn-glow" onclick="startNewSession()">Start Quiz</button>
+        </div>
+
+        <div class="action-card">
+          <h3>📂 Resume</h3>
+          <label for="importInput" class="custom-file-upload"><span id="syncNameDisplay">📥 Import Sync File</span></label>
+          <input type="file" id="importInput" accept=".json" onchange="initiateSyncImport()">
+          
+          <div class="radio-group" style="text-align: left; margin: 15px 0;">
+            <label class="radio-card"><input type="radio" name="resumeMode" value="fresh" checked><div><span class="radio-title">Fresh Only</span><span class="radio-sub">Unattempted questions</span></div></label>
+            <label class="radio-card"><input type="radio" name="resumeMode" value="weakness"><div><span class="radio-title">Weak Areas</span><span class="radio-sub">Re-try Wrong & Guessed</span></div></label>
+            <label class="radio-card"><input type="radio" name="resumeMode" value="all_attempted"><div><span class="radio-title">Review All</span><span class="radio-sub">Mix of fresh and history</span></div></label>
+          </div>
+          
+          <div class="settings-group" style="padding: 10px; margin-bottom: 10px;">
+             <div class="input-row" style="margin-bottom:0;">
+                <div class="input-wrap" style="flex:1;"><label>Max Qs (Optional)</label><input type="number" id="resumeLimit" placeholder="All" min="1"></div>
+                <div class="checkbox-wrapper" style="flex:1; justify-content: flex-start; margin-top: 18px;"><input type="checkbox" id="resumeShuffle"><label for="resumeShuffle">🔀 Shuffle</label></div>
+             </div>
+          </div>
+
+          <button class="btn btn-primary btn-full btn-glow" onclick="startResumeSession()">Resume</button>
+        </div>
+      </div>
+
+      <div class="recent-section">
+        <div class="recent-header"><h4>🕒 Recent Sessions</h4><button id="clearAllBtn" class="hidden btn-link" onclick="clearAllHistory()">Clear All</button></div>
+        <div id="recentQuizzesList"></div>
+      </div>
+    </div>
+
+    <div id="quiz" class="card hidden">
+      <div class="quiz-header">
+        <div class="header-left"><span id="questionCounter" class="badge">Q1</span><span id="sectionBadge" class="section-badge">General</span><span id="questionTimer" class="timer-pill">00s</span></div>
+        <div class="header-right"><span id="totalTimer" class="total-time">00:00</span><button class="btn btn-exit" onclick="exitSession()">💾 Save & Exit</button></div>
+      </div>
+      <div class="progress-bar-bg"><div id="progressBar"></div></div>
+      <div class="question-area"><h2 id="question"></h2></div>
+      
+      <div class="options" id="optionsContainer"></div>
+      
+      <div class="footer-tools"><label class="guess-label"><input type="checkbox" id="guessCheck" onchange="toggleGuessState()"><span>🤔 Mark as Guess</span></label></div>
+      <div id="feedback" class="hidden feedback-box"><div id="feedbackStatus"></div><div id="feedbackBody"></div><div id="feedbackLink"></div></div>
+      <div class="controls">
+        <button class="btn btn-nav-secondary" onclick="prev()">← Prev</button>
+        <button id="flagBtn" class="btn btn-nav-flag" onclick="toggleFlag()">🚩 Flag</button>
+        <div class="next-group"><button id="nextBtn" class="btn btn-primary btn-glow" onclick="next()">Next →</button><button id="submitBtn" class="btn btn-success btn-glow hidden" onclick="finishQuiz()">Submit</button></div>
+      </div>
+      <div class="mobile-notes-view"><textarea id="mobileNoteInput" placeholder="Notes (Max 100 words)..." oninput="saveCurrentNote(this.value)"></textarea><div class="word-count" id="mobileWordCount">0/100</div></div>
+    </div>
+
+    <div id="reportView" class="card hidden">
+      <h2 class="center">📊 Analytics</h2>
+      <div id="statSummary"></div>
+      <div class="sectional-container"><table id="sectionalTable" class="dark-table hidden"></table></div>
+      <div class="center" style="margin: 30px 0;"><button class="btn btn-danger btn-glow" onclick="startReviewMistakes()">🔁 Re-attempt Mistakes</button></div>
+      <div class="report-footer"><button class="btn btn-primary btn-glow" onclick="generateAnalyticPDF()">📥 PDF Report</button><button class="btn btn-secondary" onclick="location.reload()">Home</button></div>
+    </div>
+  </main>
+
+  <aside id="sidebar" class="sidebar hidden">
+      <div class="sidebar-section">
+         <div class="sidebar-header-row"><span class="sidebar-title">⚙️ Preference</span><button class="btn-xs btn-secondary toggle-btn" onclick="toggleSection('settingsPanel', this)">_</button></div>
+         <div id="settingsPanel" class="settings-panel hidden">
+            <div class="setting-row"><label>Size</label><input type="range" min="14" max="24" value="16" oninput="changeFontSize(this.value)"></div>
+            <div class="setting-row"><label>Font</label><select onchange="changeFontFamily(this.value)"><option value="'Segoe UI', sans-serif">Modern</option><option value="'Times New Roman', serif">Classic</option></select></div>
+         </div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-header-row"><span class="sidebar-title">📝 Notes</span></div>
+        <textarea id="noteInput" class="sidebar-note" placeholder="Max 100 words..." oninput="saveCurrentNote(this.value)"></textarea>
+        <div class="word-count" id="sidebarWordCount">0/100</div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-header-row"><span class="sidebar-title">🚩 Flagged (<span id="flagCount">0</span>)</span><button class="btn-xs btn-secondary toggle-btn" onclick="toggleSection('flaggedList', this)">_</button></div>
+        <div id="flaggedList" class="sidebar-list"></div>
+      </div>
+      <div class="sidebar-section" style="margin-top: 15px;">
+        <div class="sidebar-header-row"><span class="sidebar-title">⭕ Pending (<span id="unattemptedCount">0</span>)</span><button class="btn-xs btn-secondary toggle-btn" onclick="toggleSection('unattemptedList', this)">_</button></div>
+        <div id="unattemptedList" class="sidebar-list"></div>
+      </div>
+  </aside>
+</div>
+<script src="script.js"></script>
+</body>
+</html>
