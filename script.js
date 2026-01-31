@@ -193,10 +193,18 @@ function loadSession() {
   autoSaveInterval = setInterval(autoSave, 5000); 
 }
 
-/* --- FORMATTING & TEXT (UPDATED) --- */
+/* --- FORMATTING & TEXT --- */
 function formatQuestionText(text) {
     if (!text) return "";
     let formatted = text;
+    
+    // 1. Force break after Colons in questions (for Lists/Headings)
+    formatted = formatted.replace(/(:)\s+/g, '$1<br>');
+
+    // 2. Break before "Which of the statements..." or similar question prompts
+    formatted = formatted.replace(/(\s)(Which\s+of\s+the\s+(?:following\s+)?statements|Select\s+the\s+correct|Choose\s+the\s+correct|Identify\s+the\s+correct)/gi, '<br><br>$2');
+
+    // 3. Bullet points formatting
     formatted = formatted.replace(/([^\n>])\s*([“"][^”"]{30,}[”"])/g, '$1<br><span class="q-quote">$2</span>');
     formatted = formatted.replace(/(\s|^)((?:I{1,3}|IV|V|VI{0,3}|IX|X)\.)\s+/g, '<br><span class="q-point">$2&nbsp;</span>');
     formatted = formatted.replace(/(\s|^)(\(?\d+\.)\s+/g, '<br><span class="q-point">$2&nbsp;</span>');
@@ -208,14 +216,12 @@ function formatQuestionText(text) {
     return formatted;
 }
 
+// Global smart highlight for the Main Quiz Card
 function smartHighlight(text) {
     if (!text) return "";
     let processed = text;
     processed = processed.replace(/(\b\d{4}\b|Article \d+|Section \d+|Schedule \d+|Amendment|Act \d{4})/gi, '<span class="highlight-term">$1</span>');
-    
-    // UPDATED REGEX: Highlights "Option a is the correct answer" fully
     processed = processed.replace(/(Option [a-d] is [a-z ]*correct(?: answer)?|Statement \d+ is [a-z ]*correct(?: answer)?|Pair [IVX\d]+ is [a-z ]*correct(?: answer)?|Pair [IVX\d]+ is [a-z ]*incorrect(?: answer)?)/gi, '<span class="highlight-statement">$1</span>');
-    
     processed = processed.replace(/\b([A-Z][a-z]+:)/g, '<span class="definition-header">$1</span>');
     return processed;
 }
@@ -223,18 +229,42 @@ function smartHighlight(text) {
 function processTextSmartly(text) {
     if (!text) return "";
     let processed = text;
-
-    // 1. Detect Formulas (Assignments with =) and isolate them
-    // Matches patterns like "A (B) = C - D" 
+    
+    // 1. FORMULAS
     processed = processed.replace(/([a-zA-Z\s\(\)\$\.]+=[a-zA-Z0-9\s\(\)\+\-\$\.]+)(?=\.|\n|<|$)/g, '||LOGIC_SPLIT||<div class="formula-box">$1</div>||LOGIC_SPLIT||');
+    
+    // 2. HEADING DETECTION (Phrases ending in colon)
+    processed = processed.replace(/(?:^|\.\s+|\>\s*)([A-Z][^.:\n<]+:)(?=\s)/g, '<br><strong class="highlight-term">$1</strong><br>');
 
-    // 2. Logic Splits
+    // 3. LOGIC SPLITS
     processed = processed.replace(/(Pair [IVX\d]+ is (?:in)?correct(?: answer)?|Statement \d+ is (?:in)?correct(?: answer)?|Option [a-d] is (?:in)?correct(?: answer)?)/gi, '||LOGIC_SPLIT||$1');
     processed = processed.replace(/\b([A-Z][a-z]+:)/g, '||LOGIC_SPLIT||$1');
     
+    // 4. PROCESS SPLITS + INTELLIGENT PARAGRAPH BREAKING
     return processed.split('||LOGIC_SPLIT||').map(s => s.trim()).filter(s => s).map(p => {
-        // If it is a formula box, preserve it, otherwise wrap in paragraph and highlight
-        if(p.startsWith('<div class="formula-box"')) return p;
+        if(p.startsWith('<div')) return p;
+        if(p.startsWith('<br>')) return p + smartHighlight(p.replace(/^<br>/, ''));
+        
+        // --- INTELLIGENT PARAGRAPH BREAKING (New Logic) ---
+        if (p.length > 350) {
+            // Split by sentence endings (. followed by space or end of string), avoiding formulas/abbr
+            // Regex roughly: match period+space not preceded by "vs", "Mr", etc (simple approach: split by ". ")
+            let sentences = p.match(/[^.!?]+[.!?]+["']?|[^.!?]+$/g);
+            if(sentences) {
+                let chunks = [];
+                let currentChunk = "";
+                sentences.forEach(sent => {
+                    currentChunk += sent;
+                    if(currentChunk.length > 300) {
+                        chunks.push(`<p>${smartHighlight(currentChunk)}</p>`);
+                        currentChunk = "";
+                    }
+                });
+                if(currentChunk) chunks.push(`<p>${smartHighlight(currentChunk)}</p>`);
+                return chunks.join("");
+            }
+        }
+        
         return `<p>${smartHighlight(p)}</p>`;
     }).join('');
 }
@@ -305,7 +335,7 @@ function openExplanationInTab(fullExplanation, qNum) {
     const mainExp = parts[0];
     const tips = parts.length > 1 ? parts[1] : null;
     
-    // Uses standard _blank
+    // Use clean window.open to respect mobile tab behavior
     const win = window.open("", "_blank");
     
     win.document.write(`
@@ -313,7 +343,7 @@ function openExplanationInTab(fullExplanation, qNum) {
     <html lang="en">
     <head>
     <title>Q${qNum} Analysis</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <style>
         * { box-sizing: border-box; }
         :root{--bg-color:#f8f9fa;--text-color:#2c3e50;--card-bg:#ffffff;--highlight-term:#d35400;--highlight-stmt-bg:rgba(39,174,96,0.1);--highlight-stmt-text:#27ae60;--tips-bg:#E8F8F5;--tips-border:#1abc9c;--tips-header:#16a085;--btn-bg:#34495e;}
@@ -323,7 +353,7 @@ function openExplanationInTab(fullExplanation, qNum) {
             background:var(--bg-color);
             color:var(--text-color);
             font-family:'Segoe UI',sans-serif;
-            padding:0;
+            padding:15px;
             margin:0;
             line-height:1.8;
             font-size: 18px; 
@@ -331,10 +361,10 @@ function openExplanationInTab(fullExplanation, qNum) {
         }
         
         .container {
-            width: 96%; 
-            max-width: 96%; 
+            width: 100%; 
+            max-width: 900px;
             min-height: 100vh;
-            margin: 10px auto; 
+            margin: 0 auto; 
             background: var(--card-bg); 
             padding: 20px;
             border-radius: 12px; 
@@ -343,6 +373,7 @@ function openExplanationInTab(fullExplanation, qNum) {
         
         @media screen and (min-width: 768px) { 
             .container { 
+                width: 95%; 
                 margin: 20px auto; 
                 padding: 40px; 
                 min-height: auto; 
@@ -351,12 +382,13 @@ function openExplanationInTab(fullExplanation, qNum) {
 
         .header-row{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #ccc;padding-bottom:15px;margin-bottom:20px;}
         .theme-toggle{background:transparent;border:1px solid var(--text-color);color:var(--text-color);padding:5px 15px;border-radius:20px;cursor:pointer; font-size: 0.9rem;}
+        
         .highlight-term{color:var(--highlight-term);font-weight:bold;}
         .highlight-statement{color:var(--highlight-stmt-text);background:var(--highlight-stmt-bg);padding:2px 6px;border-radius:4px;font-weight:bold;}
+        
         .tips-box{margin-top:30px;background:var(--tips-bg);border-left:5px solid:var(--tips-border);padding:20px;border-radius:4px;}
         .close-btn{width:100%;margin-top:30px;padding:12px;background:var(--btn-bg);color:white;border:none;border-radius:8px;cursor:pointer;font-size:18px; font-weight:bold;}
         
-        /* NEW FORMULA BOX STYLE */
         .formula-box {
             background: rgba(0,0,0,0.2);
             padding: 12px;
@@ -367,7 +399,6 @@ function openExplanationInTab(fullExplanation, qNum) {
             word-break: break-word;
             font-size: 0.95em;
         }
-        
         p { margin-bottom: 1.2em; }
     </style>
     </head>
@@ -379,13 +410,65 @@ function openExplanationInTab(fullExplanation, qNum) {
             <button class="close-btn" onclick="window.close()">Close Tab</button>
         </div>
         <script>
-            function smartHighlight(t){ t=t.replace(/(\\b\\d{4}\\b|Article \\d+|Section \\d+)/gi,'<span class="highlight-term">$1</span>');return t.replace(/(Option [a-d] is [a-z ]*correct(?: answer)?)/gi,'<span class="highlight-statement">$1</span>');}
-            // Reuse server-side processing logic for client side render in new tab
-            function processTextSmartly(t){ 
+            function smartHighlight(t) {
+                // 1. ACTS: Includes "The", "86th", "Amendment", "Bill", "Rules"
+                t = t.replace(/\\b((?:The\\s|\\d+(?:st|nd|rd|th)?\\s)?[A-Z][\\w\\s\\-]*(?:Act|Amendment|Bill|Rules|Code|Ordinance|Policy)(?:,?\\s\\d{4})?)\\b/g, '<span class="highlight-term">$1</span>');
+
+                // 2. BODIES: Committee, Commission, Tribunal, Council, Aayog
+                t = t.replace(/\\b([A-Z][\\w\\s\\.]*(?:Committee|Commission|Tribunal|Council|Aayog|Authority|Bench))\\b/g, '<span class="highlight-term">$1</span>');
+                t = t.replace(/\\b(\\d+-member\\s(?:bench|committee|panel|body))\\b/gi, '<span class="highlight-term">$1</span>');
+
+                // 3. HISTORY: Wars, Battles, Revolutions
+                t = t.replace(/\\b((?:First|Second|Third|The)?\\s?(?:Battle|Siege|Treaty|War|Revolt|Mutiny)\\s(?:of\\s)?[A-Z][\\w\\s\\-]*(?:\\s\\(\\d{4}(?:-\\d{2,4})?\\))?)\\b/g, '<span class="highlight-term">$1</span>');
+                t = t.replace(/\\b([A-Z][\\w\\s\\-]*(?:War|Battle|Revolution|Revolt|Mutiny|Movement)(?:\\s\\(\\d{4}(?:-\\d{2,4})?\\))?)\\b/g, '<span class="highlight-term">$1</span>');
+
+                // 4. DYNASTIES & DIPLOMACY
+                t = t.replace(/\\b([A-Z][a-zA-Z\\s\\-]*(?:Dynasty|Empire|Kingdom|Sultanate|Caliphate))\\b/g, '<span class="highlight-term">$1</span>');
+                t = t.replace(/\\b([A-Z][\\w\\s\\-]*(?:Conference|Summit|Pact|Accord|Convention|Protocol)(?:\\s\\d{4})?)\\b/g, '<span class="highlight-term">$1</span>');
+
+                // 5. LEGAL CASES
+                t = t.replace(/\\b([A-Z][\\w\\s\\.]+\\svs\\.?\\s[A-Z][\\w\\s\\.]+(?:\\s\\(\\d{4}\\))?)\\b/g, '<span class="highlight-term">$1</span>');
+
+                // 6. DATA
+                t = t.replace(/\\b(\\d+(?:\\.\\d+)?%\\s(?:[a-zA-Z]+\\s?){1,4})\\b/g, '<span class="highlight-term">$1</span>');
+                t = t.replace(/\\b(\\d+(?:\\.\\d+)?\\s(?:Lakh|Lac|Cr|Crore|Million|Billion|Trillion|tonnes|liters|km)\\s[\\w\\s]{2,15})\\b/gi, '<span class="highlight-term">$1</span>');
+
+                // 7. ARTICLES/SECTIONS
+                t = t.replace(/(\\b(?:17|18|19|20)\\d{2}\\b|Article \\d+|Section \\d+|Schedule \\d+)/gi, '<span class="highlight-term">$1</span>');
+
+                return t.replace(/(Option [a-d] is [a-z ]*correct(?: answer)?)/gi, '<span class="highlight-statement">$1</span>');
+            }
+
+            function processTextSmartly(t) { 
+                 // 1. FORMULAS
                  t = t.replace(/([a-zA-Z\\s\\(\\)\\$\\.]+=[a-zA-Z0-9\\s\\(\\)\\+\\-\\$\\.]+)(?=\\.|\\n|<|$)/g, '||LOGIC_SPLIT||<div class="formula-box">$1</div>||LOGIC_SPLIT||');
+                 
+                 // 2. HEADING DETECTION (Phrases ending in colon)
+                 t = t.replace(/(?:^|\\.\\s+|\\>\\s*)([A-Z][^.:\\n<]+:)(?=\\s)/g, '<br><strong class="highlight-term">$1</strong><br>');
+
+                 // 3. LOGIC SPLITS
                  t = t.replace(/(Option [a-d] is (?:in)?correct(?: answer)?)/gi, '||LOGIC_SPLIT||$1');
+                 
                  return t.split('||LOGIC_SPLIT||').map(s=> {
                     if(s.startsWith('<div')) return s;
+                    if(s.startsWith('<br>')) return s + smartHighlight(s.replace(/^<br>/, ''));
+                    
+                    // INTELLIGENT PARAGRAPH BREAKING
+                    if (s.length > 350) {
+                        let sentences = s.match(/[^.!?]+[.!?]+["']?|[^.!?]+$/g);
+                        if(sentences) {
+                            let chunks = [], currentChunk = "";
+                            sentences.forEach(sent => {
+                                currentChunk += sent;
+                                if(currentChunk.length > 300) {
+                                    chunks.push('<p>'+smartHighlight(currentChunk)+'</p>');
+                                    currentChunk = "";
+                                }
+                            });
+                            if(currentChunk) chunks.push('<p>'+smartHighlight(currentChunk)+'</p>');
+                            return chunks.join("");
+                        }
+                    }
                     return '<p>'+smartHighlight(s)+'</p>';
                  }).join(''); 
             }
@@ -471,8 +554,10 @@ function finishQuiz() {
   saveToHistory();
   showReport();
 
+  // 1. AUTO DOWNLOAD PDF
   generateAnalyticPDF();
 
+  // 2. CONDITIONAL SYNC JSON DOWNLOAD
   if (activeSession.unusedQuestions && activeSession.unusedQuestions.length > 0) {
       exitSession(true);
   }
@@ -482,6 +567,7 @@ function downloadSyncFile() {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(activeSession));
     const dlNode = document.createElement('a');
     
+    // Naming: [OriginalNames]_[Timestamp]_sync.json
     const now = new Date();
     const timestamp = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, '0') + "-" + String(now.getDate()).padStart(2, '0') + "_" + String(now.getHours()).padStart(2, '0') + "-" + String(now.getMinutes()).padStart(2, '0');
     const baseName = activeSession.originalFileName || activeSession.title || "quiz";
@@ -505,6 +591,7 @@ function showReport() {
   const percentage = maxScore > 0 ? (r.score / maxScore) * 100 : 0;
   const avgTime = r.total > 0 ? totalSeconds / r.total : 0;
 
+  // Overall Summary Table
   let html = `
   <table class="dark-table" style="margin-bottom: 30px; width: 100%;">
     <thead><tr><th colspan="2" style="text-align:center; font-size: 1.1rem;">🏁 Overall Summary</th></tr></thead>
@@ -563,11 +650,13 @@ async function generateAnalyticPDF() {
   doc.setFillColor(30, 41, 59); doc.rect(0, 0, 210, 30, 'F'); doc.setTextColor(255); doc.setFontSize(16); doc.text(activeSession.title.substring(0,35), 14, 19);
   doc.setFontSize(10); doc.text(`Score: ${fmt(r.score)} | Accuracy: ${fmt(accuracyVal)}%`, 140, 19);
 
+  // 1. Overall
   const overallData = [ 
       ['Total Questions', r.total], ['Attempted', attempted], ['Accuracy', `${fmt(accuracyVal)}%`], ['Percentage', `${fmt(percentageVal)}%`], ['Avg Time / Question', `${fmt(avgTimeVal)}s`], ['Correct (+'+fmt(s.mark)+')', `${r.c} (+${fmt(correctScoreVal)})`], ['Wrong (-'+fmt(s.neg)+')', `${r.w} (-${fmt(wrongScoreVal)})`], ['FINAL SCORE', `${fmt(r.score)} / ${fmt(maxScoreVal)}`] 
   ];
   doc.autoTable({ startY: 40, head: [['Metric', 'Value']], body: overallData, theme: 'grid', headStyles: { fillColor: [51, 65, 85] } });
 
+  // 2. Sectional
   const sectionRows = Object.keys(r.sections).map(k => {
       const sec = r.sections[k];
       const sAtt = sec.c + sec.w;
@@ -581,6 +670,7 @@ async function generateAnalyticPDF() {
   doc.text("Section-Wise Breakdown", 14, doc.lastAutoTable.finalY + 15);
   doc.autoTable({ startY: doc.lastAutoTable.finalY + 20, head: [['Section', 'Tot', 'Att', 'Acc', '%', 'Time/Q', 'Cor', 'Wro', 'Score']], body: sectionRows, theme: 'grid', headStyles: { fillColor: [71, 85, 105] }, styles: { fontSize: 8 } });
 
+  // 3. Questions (Full Text, Reverted Columns)
   const qRows = questions.map((q, i) => [ 
       `Q${i+1}`, 
       q.q, // Full text
@@ -607,6 +697,7 @@ async function generateAnalyticPDF() {
       } 
   });
 
+  // 4. Notes
   const notesQ = questions.filter(q => q.notes && q.notes.trim() !== "");
   if (notesQ.length > 0) {
       doc.addPage(); doc.setFontSize(14); doc.setTextColor(0); doc.text("Personal Notes", 14, 20);
