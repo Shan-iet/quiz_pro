@@ -23,11 +23,7 @@ function updateFileName(input, displayId) {
 function toggleSidebarView() {
     const container = document.querySelector('.app-container');
     const showBtn = document.getElementById('showSidebarBtn');
-    
-    // Toggle the class on the main container
     container.classList.toggle('collapsed');
-    
-    // Toggle visibility of the "Show Sidebar" button in header
     if (container.classList.contains('collapsed')) {
         showBtn.classList.remove('hidden');
     } else {
@@ -143,41 +139,31 @@ function startResumeSession() {
             previousActive = previousActive.map(patchSection);
             previousUnused = previousUnused.map(patchSection);
 
-            // 1. Combine all available questions
             const masterPool = [...previousActive, ...previousUnused];
-            
-            // 2. Filter based on mode
             let candidateQ = [];
             let remainingPool = [];
 
             if (mode === 'fresh') {
-                // Fresh: Unattempted only
                 candidateQ = masterPool.filter(q => q.sel === null);
-                // Keep already attempted in the pool (effectively ignoring them for this session, but saving them)
                 remainingPool = masterPool.filter(q => q.sel !== null);
             } 
             else if (mode === 'all_attempted') {
-                // Review All: Everyone is a candidate
                 candidateQ = masterPool;
                 remainingPool = []; 
             }
             else if (mode === 'weakness') {
-                // Weakness: Wrong or Guess
                 candidateQ = masterPool.filter(q => (q.sel && q.sel !== q.answer) || q.guess === true);
-                // The rest (Correct & Confident, or Unattempted) stay in pool
                 remainingPool = masterPool.filter(q => !((q.sel && q.sel !== q.answer) || q.guess === true));
             }
 
             if(candidateQ.length === 0) return alert("No questions match your selection criteria!");
             if (doShuffle) shuffleArray(candidateQ);
 
-            // 3. Apply Limit
             let activeQ = [];
             const limit = parseInt(resumeLimitInput);
             
             if (!isNaN(limit) && limit > 0 && limit < candidateQ.length) {
                 activeQ = candidateQ.slice(0, limit);
-                // Important: Add the overflow back to unused so they aren't deleted
                 const overflow = candidateQ.slice(limit);
                 remainingPool = [...remainingPool, ...overflow];
             } else {
@@ -188,7 +174,7 @@ function startResumeSession() {
                 ...tempSyncData, 
                 status: "in-progress", 
                 questions: activeQ,
-                unusedQuestions: remainingPool, // Preserves unselected questions
+                unusedQuestions: remainingPool,
                 qIndex: 0
             };
             saveAndLoad();
@@ -207,7 +193,7 @@ function loadSession() {
   autoSaveInterval = setInterval(autoSave, 5000); 
 }
 
-/* --- FORMATTING & TEXT --- */
+/* --- FORMATTING & TEXT (UPDATED) --- */
 function formatQuestionText(text) {
     if (!text) return "";
     let formatted = text;
@@ -226,16 +212,31 @@ function smartHighlight(text) {
     if (!text) return "";
     let processed = text;
     processed = processed.replace(/(\b\d{4}\b|Article \d+|Section \d+|Schedule \d+|Amendment|Act \d{4})/gi, '<span class="highlight-term">$1</span>');
-    processed = processed.replace(/(Option [a-d] is [a-z ]*correct:?|Statement \d+ is [a-z ]*correct:?|Pair [IVX\d]+ is [a-z ]*correct:?|Pair [IVX\d]+ is [a-z ]*incorrect:?)/gi, '<span class="highlight-statement">$1</span>');
+    
+    // UPDATED REGEX: Highlights "Option a is the correct answer" fully
+    processed = processed.replace(/(Option [a-d] is [a-z ]*correct(?: answer)?|Statement \d+ is [a-z ]*correct(?: answer)?|Pair [IVX\d]+ is [a-z ]*correct(?: answer)?|Pair [IVX\d]+ is [a-z ]*incorrect(?: answer)?)/gi, '<span class="highlight-statement">$1</span>');
+    
     processed = processed.replace(/\b([A-Z][a-z]+:)/g, '<span class="definition-header">$1</span>');
     return processed;
 }
 
 function processTextSmartly(text) {
     if (!text) return "";
-    let processed = text.replace(/(Pair [IVX\d]+ is (?:in)?correct:?|Statement \d+ is (?:in)?correct:?|Option [a-d] is (?:in)?correct:?)/gi, '||LOGIC_SPLIT||$1');
+    let processed = text;
+
+    // 1. Detect Formulas (Assignments with =) and isolate them
+    // Matches patterns like "A (B) = C - D" 
+    processed = processed.replace(/([a-zA-Z\s\(\)\$\.]+=[a-zA-Z0-9\s\(\)\+\-\$\.]+)(?=\.|\n|<|$)/g, '||LOGIC_SPLIT||<div class="formula-box">$1</div>||LOGIC_SPLIT||');
+
+    // 2. Logic Splits
+    processed = processed.replace(/(Pair [IVX\d]+ is (?:in)?correct(?: answer)?|Statement \d+ is (?:in)?correct(?: answer)?|Option [a-d] is (?:in)?correct(?: answer)?)/gi, '||LOGIC_SPLIT||$1');
     processed = processed.replace(/\b([A-Z][a-z]+:)/g, '||LOGIC_SPLIT||$1');
-    return processed.split('||LOGIC_SPLIT||').map(s => s.trim()).filter(s => s).map(p => `<p>${smartHighlight(p)}</p>`).join('');
+    
+    return processed.split('||LOGIC_SPLIT||').map(s => s.trim()).filter(s => s).map(p => {
+        // If it is a formula box, preserve it, otherwise wrap in paragraph and highlight
+        if(p.startsWith('<div class="formula-box"')) return p;
+        return `<p>${smartHighlight(p)}</p>`;
+    }).join('');
 }
 
 function loadQuestion() {
@@ -303,33 +304,45 @@ function openExplanationInTab(fullExplanation, qNum) {
     const parts = fullExplanation.split("||TIPS||");
     const mainExp = parts[0];
     const tips = parts.length > 1 ? parts[1] : null;
+    
+    // Uses standard _blank
     const win = window.open("", "_blank");
+    
     win.document.write(`
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
     <head>
     <title>Q${qNum} Analysis</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
     <style>
         * { box-sizing: border-box; }
         :root{--bg-color:#f8f9fa;--text-color:#2c3e50;--card-bg:#ffffff;--highlight-term:#d35400;--highlight-stmt-bg:rgba(39,174,96,0.1);--highlight-stmt-text:#27ae60;--tips-bg:#E8F8F5;--tips-border:#1abc9c;--tips-header:#16a085;--btn-bg:#34495e;}
         [data-theme="dark"]{--bg-color:#0f172a;--text-color:#e2e8f0;--card-bg:#1e293b;--highlight-term:#818cf8;--highlight-stmt-bg:rgba(16,185,129,0.2);--highlight-stmt-text:#34d399;--tips-bg:#1e293b;--tips-border:#10b981;--tips-header:#34d399;--btn-bg:#4f46e5;}
-        body{background:var(--bg-color);color:var(--text-color);font-family:'Segoe UI',sans-serif;padding:0;margin:0;line-height:1.8;transition:0.3s;}
         
-        /* UPDATED CONTAINER: FORCE 96% WIDTH */
-        .container{
+        body {
+            background:var(--bg-color);
+            color:var(--text-color);
+            font-family:'Segoe UI',sans-serif;
+            padding:0;
+            margin:0;
+            line-height:1.8;
+            font-size: 18px; 
+            transition:0.3s;
+        }
+        
+        .container {
             width: 96%; 
             max-width: 96%; 
             min-height: 100vh;
             margin: 10px auto; 
-            background:var(--card-bg); 
-            padding:20px;
-            border-radius:12px; 
-            box-shadow:0 4px 15px rgba(0,0,0,0.1);
+            background: var(--card-bg); 
+            padding: 20px;
+            border-radius: 12px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
         
         @media screen and (min-width: 768px) { 
             .container { 
-                /* Removed max-width restriction */
                 margin: 20px auto; 
                 padding: 40px; 
                 min-height: auto; 
@@ -337,11 +350,25 @@ function openExplanationInTab(fullExplanation, qNum) {
         }
 
         .header-row{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #ccc;padding-bottom:15px;margin-bottom:20px;}
-        .theme-toggle{background:transparent;border:1px solid var(--text-color);color:var(--text-color);padding:5px 15px;border-radius:20px;cursor:pointer;}
+        .theme-toggle{background:transparent;border:1px solid var(--text-color);color:var(--text-color);padding:5px 15px;border-radius:20px;cursor:pointer; font-size: 0.9rem;}
         .highlight-term{color:var(--highlight-term);font-weight:bold;}
         .highlight-statement{color:var(--highlight-stmt-text);background:var(--highlight-stmt-bg);padding:2px 6px;border-radius:4px;font-weight:bold;}
         .tips-box{margin-top:30px;background:var(--tips-bg);border-left:5px solid:var(--tips-border);padding:20px;border-radius:4px;}
-        .close-btn{width:100%;margin-top:30px;padding:12px;background:var(--btn-bg);color:white;border:none;border-radius:8px;cursor:pointer;font-size:16px;}
+        .close-btn{width:100%;margin-top:30px;padding:12px;background:var(--btn-bg);color:white;border:none;border-radius:8px;cursor:pointer;font-size:18px; font-weight:bold;}
+        
+        /* NEW FORMULA BOX STYLE */
+        .formula-box {
+            background: rgba(0,0,0,0.2);
+            padding: 12px;
+            border-left: 4px solid var(--highlight-stmt-text);
+            font-family: 'Consolas', 'Monaco', monospace;
+            margin: 15px 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-size: 0.95em;
+        }
+        
+        p { margin-bottom: 1.2em; }
     </style>
     </head>
     <body data-theme="dark">
@@ -349,11 +376,19 @@ function openExplanationInTab(fullExplanation, qNum) {
             <div class="header-row"><h1>Question ${qNum} Analysis</h1><button class="theme-toggle" onclick="document.body.setAttribute('data-theme',document.body.getAttribute('data-theme')==='dark'?'light':'dark')">🌗 Theme</button></div>
             <div>${processTextSmartly(mainExp)}</div>
             ${tips ? `<div class="tips-box"><strong>💡 TIPS:</strong> ${processTextSmartly(tips)}</div>` : ''}
-            <button class="close-btn" onclick="window.close()">Close & Resume</button>
+            <button class="close-btn" onclick="window.close()">Close Tab</button>
         </div>
         <script>
-            function smartHighlight(t){ t=t.replace(/(\\b\\d{4}\\b|Article \\d+|Section \\d+)/gi,'<span class="highlight-term">$1</span>');return t.replace(/(Option [a-d] is [a-z ]*correct:?)/gi,'<span class="highlight-statement">$1</span>');}
-            function processTextSmartly(t){ return t.split('||LOGIC_SPLIT||').map(s=>'<p>'+smartHighlight(s)+'</p>').join(''); }
+            function smartHighlight(t){ t=t.replace(/(\\b\\d{4}\\b|Article \\d+|Section \\d+)/gi,'<span class="highlight-term">$1</span>');return t.replace(/(Option [a-d] is [a-z ]*correct(?: answer)?)/gi,'<span class="highlight-statement">$1</span>');}
+            // Reuse server-side processing logic for client side render in new tab
+            function processTextSmartly(t){ 
+                 t = t.replace(/([a-zA-Z\\s\\(\\)\\$\\.]+=[a-zA-Z0-9\\s\\(\\)\\+\\-\\$\\.]+)(?=\\.|\\n|<|$)/g, '||LOGIC_SPLIT||<div class="formula-box">$1</div>||LOGIC_SPLIT||');
+                 t = t.replace(/(Option [a-d] is (?:in)?correct(?: answer)?)/gi, '||LOGIC_SPLIT||$1');
+                 return t.split('||LOGIC_SPLIT||').map(s=> {
+                    if(s.startsWith('<div')) return s;
+                    return '<p>'+smartHighlight(s)+'</p>';
+                 }).join(''); 
+            }
         </script>
     </body>
     </html>`);
@@ -436,10 +471,8 @@ function finishQuiz() {
   saveToHistory();
   showReport();
 
-  // 1. AUTO DOWNLOAD PDF
   generateAnalyticPDF();
 
-  // 2. CONDITIONAL SYNC JSON DOWNLOAD
   if (activeSession.unusedQuestions && activeSession.unusedQuestions.length > 0) {
       exitSession(true);
   }
@@ -449,7 +482,6 @@ function downloadSyncFile() {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(activeSession));
     const dlNode = document.createElement('a');
     
-    // Naming: [OriginalNames]_[Timestamp]_sync.json
     const now = new Date();
     const timestamp = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, '0') + "-" + String(now.getDate()).padStart(2, '0') + "_" + String(now.getHours()).padStart(2, '0') + "-" + String(now.getMinutes()).padStart(2, '0');
     const baseName = activeSession.originalFileName || activeSession.title || "quiz";
@@ -473,7 +505,6 @@ function showReport() {
   const percentage = maxScore > 0 ? (r.score / maxScore) * 100 : 0;
   const avgTime = r.total > 0 ? totalSeconds / r.total : 0;
 
-  // Overall Summary Table
   let html = `
   <table class="dark-table" style="margin-bottom: 30px; width: 100%;">
     <thead><tr><th colspan="2" style="text-align:center; font-size: 1.1rem;">🏁 Overall Summary</th></tr></thead>
@@ -532,13 +563,11 @@ async function generateAnalyticPDF() {
   doc.setFillColor(30, 41, 59); doc.rect(0, 0, 210, 30, 'F'); doc.setTextColor(255); doc.setFontSize(16); doc.text(activeSession.title.substring(0,35), 14, 19);
   doc.setFontSize(10); doc.text(`Score: ${fmt(r.score)} | Accuracy: ${fmt(accuracyVal)}%`, 140, 19);
 
-  // 1. Overall
   const overallData = [ 
       ['Total Questions', r.total], ['Attempted', attempted], ['Accuracy', `${fmt(accuracyVal)}%`], ['Percentage', `${fmt(percentageVal)}%`], ['Avg Time / Question', `${fmt(avgTimeVal)}s`], ['Correct (+'+fmt(s.mark)+')', `${r.c} (+${fmt(correctScoreVal)})`], ['Wrong (-'+fmt(s.neg)+')', `${r.w} (-${fmt(wrongScoreVal)})`], ['FINAL SCORE', `${fmt(r.score)} / ${fmt(maxScoreVal)}`] 
   ];
   doc.autoTable({ startY: 40, head: [['Metric', 'Value']], body: overallData, theme: 'grid', headStyles: { fillColor: [51, 65, 85] } });
 
-  // 2. Sectional
   const sectionRows = Object.keys(r.sections).map(k => {
       const sec = r.sections[k];
       const sAtt = sec.c + sec.w;
@@ -552,7 +581,6 @@ async function generateAnalyticPDF() {
   doc.text("Section-Wise Breakdown", 14, doc.lastAutoTable.finalY + 15);
   doc.autoTable({ startY: doc.lastAutoTable.finalY + 20, head: [['Section', 'Tot', 'Att', 'Acc', '%', 'Time/Q', 'Cor', 'Wro', 'Score']], body: sectionRows, theme: 'grid', headStyles: { fillColor: [71, 85, 105] }, styles: { fontSize: 8 } });
 
-  // 3. Questions (Full Text, Reverted Columns)
   const qRows = questions.map((q, i) => [ 
       `Q${i+1}`, 
       q.q, // Full text
@@ -579,7 +607,6 @@ async function generateAnalyticPDF() {
       } 
   });
 
-  // 4. Notes
   const notesQ = questions.filter(q => q.notes && q.notes.trim() !== "");
   if (notesQ.length > 0) {
       doc.addPage(); doc.setFontSize(14); doc.setTextColor(0); doc.text("Personal Notes", 14, 20);
