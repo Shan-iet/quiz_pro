@@ -47,7 +47,7 @@ body {
   padding: 0 20px;
 }
 
-/* COLLAPSED STATE: Sidebar Width 0 */
+/* COLLAPSED STATE */
 .app-container.quiz-mode.collapsed {
     grid-template-columns: 1fr 0px;
     gap: 0;
@@ -141,7 +141,7 @@ input[type="file"] { display: none; }
 }
 .source-tag { display: block; font-size: 0.85rem; color: var(--text-muted); margin-top: 10px; font-style: italic; border-left: 3px solid var(--border); padding-left: 10px; }
 
-/* Logic specific styles (Bullets, Quotes, A/R) */
+/* Logic specific styles */
 .q-point { display: inline-block; margin-left: 5px; font-weight: 600; color: #e2e8f0; }
 .q-quote { display: block; margin: 15px 0 15px 10px; padding-left: 15px; border-left: 3px solid var(--primary); font-style: italic; color: #cbd5e1; background: rgba(255,255,255,0.03); padding: 10px; border-radius: 0 4px 4px 0; }
 .ar-box { margin: 8px 0; padding: 8px 12px; background: rgba(255,255,255,0.05); border-radius: 6px; border-left: 3px solid #f59e0b; }
@@ -165,10 +165,39 @@ input[type="file"] { display: none; }
 .option-btn.wrong { background: var(--danger) !important; color: white; border-color: var(--danger); opacity: 0.95; }
 .option-btn:disabled { cursor: default; opacity: 0.9; }
 
-/* --- FEEDBACK & EXPLANATION STYLING (Inline) --- */
-.feedback-box { margin-top: 25px; padding: 20px; background: rgba(30, 41, 59, 0.7); border-radius: 12px; border-left: 5px solid var(--success); }
-.exp-link { color: var(--primary); text-decoration: underline; cursor: pointer; font-weight: 700; margin-top: 10px; display: block; }
-.beautified-explanation { color: #cbd5e1; line-height: 1.6; }
+/* --- FEEDBACK & EXPLANATION STYLING --- */
+/* UPDATED: Extremely Compact & Dynamic */
+.feedback-box { 
+    margin-top: 15px; 
+    padding: 6px 12px; /* Very tight padding */
+    background: rgba(30, 41, 59, 0.7); 
+    border-radius: 8px; 
+    border-left: 4px solid var(--success); 
+    width: fit-content; 
+    max-width: 100%;    
+    display: inline-flex; /* Shrink-wrap exactly */
+    flex-direction: column; /* Stack contents vertical */
+    gap: 4px; /* Tiny gap between elements, no margins */
+}
+
+/* Strip margins from internal p/divs to allow Gap to control spacing */
+.feedback-box div, .feedback-box p {
+    margin: 0;
+    line-height: 1.3;
+}
+
+/* Link styling inside box */
+.exp-link { 
+    color: var(--primary); 
+    text-decoration: underline; 
+    cursor: pointer; 
+    font-weight: 700; 
+    margin: 0; /* Remove margin, use gap */
+    display: block; 
+    font-size: 0.85rem; 
+}
+
+.beautified-explanation { color: #cbd5e1; line-height: 1.6; font-size: 0.85rem; }
 
 /* Highlight Classes */
 .highlight-term { color: #818cf8; font-weight: 700; }

@@ -198,13 +198,13 @@ function formatQuestionText(text) {
     if (!text) return "";
     let formatted = text;
     
-    // 1. Force break after Colons in questions (for Lists/Headings)
+    // 1. Force break after Colons
     formatted = formatted.replace(/(:)\s+/g, '$1<br>');
 
-    // 2. Break before "Which of the statements..." or similar question prompts
+    // 2. Break before "Which of the statements..."
     formatted = formatted.replace(/(\s)(Which\s+of\s+the\s+(?:following\s+)?statements|Select\s+the\s+correct|Choose\s+the\s+correct|Identify\s+the\s+correct)/gi, '<br><br>$2');
 
-    // 3. Bullet points formatting
+    // 3. Bullets & Points
     formatted = formatted.replace(/([^\n>])\s*([“"][^”"]{30,}[”"])/g, '$1<br><span class="q-quote">$2</span>');
     formatted = formatted.replace(/(\s|^)((?:I{1,3}|IV|V|VI{0,3}|IX|X)\.)\s+/g, '<br><span class="q-point">$2&nbsp;</span>');
     formatted = formatted.replace(/(\s|^)(\(?\d+\.)\s+/g, '<br><span class="q-point">$2&nbsp;</span>');
@@ -216,7 +216,7 @@ function formatQuestionText(text) {
     return formatted;
 }
 
-// Global smart highlight for the Main Quiz Card
+// Main smart highlight
 function smartHighlight(text) {
     if (!text) return "";
     let processed = text;
@@ -230,29 +230,25 @@ function processTextSmartly(text) {
     if (!text) return "";
     let processed = text;
     
-    // 1. FORMULAS
+    // 1. Formulas
     processed = processed.replace(/([a-zA-Z\s\(\)\$\.]+=[a-zA-Z0-9\s\(\)\+\-\$\.]+)(?=\.|\n|<|$)/g, '||LOGIC_SPLIT||<div class="formula-box">$1</div>||LOGIC_SPLIT||');
     
-    // 2. HEADING DETECTION (Phrases ending in colon)
-    processed = processed.replace(/(?:^|\.\s+|\>\s*)([A-Z][^.:\n<]+:)(?=\s)/g, '<br><strong class="highlight-term">$1</strong><br>');
+    // 2. Headings
+    processed = processed.replace(/(?:^|\.\s+|\>\s*)([A-Z][^.:\n<]+:)(?=\\s)/g, '<br><strong class="highlight-term">$1</strong><br>');
 
-    // 3. LOGIC SPLITS
+    // 3. Logic Splits
     processed = processed.replace(/(Pair [IVX\d]+ is (?:in)?correct(?: answer)?|Statement \d+ is (?:in)?correct(?: answer)?|Option [a-d] is (?:in)?correct(?: answer)?)/gi, '||LOGIC_SPLIT||$1');
     processed = processed.replace(/\b([A-Z][a-z]+:)/g, '||LOGIC_SPLIT||$1');
     
-    // 4. PROCESS SPLITS + INTELLIGENT PARAGRAPH BREAKING
     return processed.split('||LOGIC_SPLIT||').map(s => s.trim()).filter(s => s).map(p => {
         if(p.startsWith('<div')) return p;
         if(p.startsWith('<br>')) return p + smartHighlight(p.replace(/^<br>/, ''));
         
-        // --- INTELLIGENT PARAGRAPH BREAKING (New Logic) ---
+        // Intelligent Paragraph Break
         if (p.length > 350) {
-            // Split by sentence endings (. followed by space or end of string), avoiding formulas/abbr
-            // Regex roughly: match period+space not preceded by "vs", "Mr", etc (simple approach: split by ". ")
             let sentences = p.match(/[^.!?]+[.!?]+["']?|[^.!?]+$/g);
             if(sentences) {
-                let chunks = [];
-                let currentChunk = "";
+                let chunks = [], currentChunk = "";
                 sentences.forEach(sent => {
                     currentChunk += sent;
                     if(currentChunk.length > 300) {
@@ -264,7 +260,6 @@ function processTextSmartly(text) {
                 return chunks.join("");
             }
         }
-        
         return `<p>${smartHighlight(p)}</p>`;
     }).join('');
 }
@@ -303,7 +298,8 @@ function loadQuestion() {
 
   const guessCheck = document.getElementById("guessCheck");
   guessCheck.checked = q.guess || false;
-  guessCheck.disabled = (q.sel !== null);
+  // UPDATED: Guess check is never disabled now
+  guessCheck.disabled = false;
 
   const noteVal = q.notes || "";
   const words = noteVal.trim() ? noteVal.trim().split(/\s+/).length : 0;
@@ -335,7 +331,7 @@ function openExplanationInTab(fullExplanation, qNum) {
     const mainExp = parts[0];
     const tips = parts.length > 1 ? parts[1] : null;
     
-    // Use clean window.open to respect mobile tab behavior
+    // Clean window open
     const win = window.open("", "_blank");
     
     win.document.write(`
@@ -353,34 +349,36 @@ function openExplanationInTab(fullExplanation, qNum) {
             background:var(--bg-color);
             color:var(--text-color);
             font-family:'Segoe UI',sans-serif;
-            padding:15px;
             margin:0;
+            padding: 20px; /* Base padding */
             line-height:1.8;
             font-size: 18px; 
             transition:0.3s;
         }
         
         .container {
-            width: 100%; 
-            max-width: 900px;
+            width: 96%; 
+            max-width: 96%; /* Explicitly 96% */
             min-height: 100vh;
             margin: 0 auto; 
             background: var(--card-bg); 
-            padding: 20px;
+            padding: 40px;
             border-radius: 12px; 
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
-        
-        @media screen and (min-width: 768px) { 
-            .container { 
-                width: 95%; 
-                margin: 20px auto; 
-                padding: 40px; 
-                min-height: auto; 
-            } 
-        }
 
-        .header-row{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #ccc;padding-bottom:15px;margin-bottom:20px;}
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap; /* Wrap on narrow screens */
+            gap: 10px;
+            border-bottom: 2px solid #ccc;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+        h1 { margin: 0; font-size: 1.5rem; }
+
         .theme-toggle{background:transparent;border:1px solid var(--text-color);color:var(--text-color);padding:5px 15px;border-radius:20px;cursor:pointer; font-size: 0.9rem;}
         
         .highlight-term{color:var(--highlight-term);font-weight:bold;}
@@ -396,10 +394,21 @@ function openExplanationInTab(fullExplanation, qNum) {
             font-family: 'Consolas', 'Monaco', monospace;
             margin: 15px 0;
             white-space: pre-wrap;
-            word-break: break-word;
+            word-break: break-word; /* Handle normal text wrapping */
             font-size: 0.95em;
+            overflow-x: auto; /* SCROLLBAR FOR LONG FORMULAS */
         }
+        
         p { margin-bottom: 1.2em; }
+
+        /* PORTRAIT / MOBILE FIXES */
+        @media screen and (max-width: 600px) {
+            body { padding: 10px; font-size: 16px; }
+            .container { padding: 15px; width: 100%; border-radius: 0; box-shadow: none; }
+            .header-row { align-items: flex-start; } 
+            h1 { font-size: 1.25rem; }
+            .formula-box { font-size: 0.85em; white-space: nowrap; } /* Force scroll for formulas on tiny screens */
+        }
     </style>
     </head>
     <body data-theme="dark">
@@ -411,14 +420,14 @@ function openExplanationInTab(fullExplanation, qNum) {
         </div>
         <script>
             function smartHighlight(t) {
-                // 1. ACTS: Includes "The", "86th", "Amendment", "Bill", "Rules"
+                // 1. ACTS
                 t = t.replace(/\\b((?:The\\s|\\d+(?:st|nd|rd|th)?\\s)?[A-Z][\\w\\s\\-]*(?:Act|Amendment|Bill|Rules|Code|Ordinance|Policy)(?:,?\\s\\d{4})?)\\b/g, '<span class="highlight-term">$1</span>');
 
-                // 2. BODIES: Committee, Commission, Tribunal, Council, Aayog
+                // 2. BODIES
                 t = t.replace(/\\b([A-Z][\\w\\s\\.]*(?:Committee|Commission|Tribunal|Council|Aayog|Authority|Bench))\\b/g, '<span class="highlight-term">$1</span>');
                 t = t.replace(/\\b(\\d+-member\\s(?:bench|committee|panel|body))\\b/gi, '<span class="highlight-term">$1</span>');
 
-                // 3. HISTORY: Wars, Battles, Revolutions
+                // 3. HISTORY
                 t = t.replace(/\\b((?:First|Second|Third|The)?\\s?(?:Battle|Siege|Treaty|War|Revolt|Mutiny)\\s(?:of\\s)?[A-Z][\\w\\s\\-]*(?:\\s\\(\\d{4}(?:-\\d{2,4})?\\))?)\\b/g, '<span class="highlight-term">$1</span>');
                 t = t.replace(/\\b([A-Z][\\w\\s\\-]*(?:War|Battle|Revolution|Revolt|Mutiny|Movement)(?:\\s\\(\\d{4}(?:-\\d{2,4})?\\))?)\\b/g, '<span class="highlight-term">$1</span>');
 
@@ -443,7 +452,7 @@ function openExplanationInTab(fullExplanation, qNum) {
                  // 1. FORMULAS
                  t = t.replace(/([a-zA-Z\\s\\(\\)\\$\\.]+=[a-zA-Z0-9\\s\\(\\)\\+\\-\\$\\.]+)(?=\\.|\\n|<|$)/g, '||LOGIC_SPLIT||<div class="formula-box">$1</div>||LOGIC_SPLIT||');
                  
-                 // 2. HEADING DETECTION (Phrases ending in colon)
+                 // 2. HEADINGS
                  t = t.replace(/(?:^|\\.\\s+|\\>\\s*)([A-Z][^.:\\n<]+:)(?=\\s)/g, '<br><strong class="highlight-term">$1</strong><br>');
 
                  // 3. LOGIC SPLITS
@@ -453,7 +462,6 @@ function openExplanationInTab(fullExplanation, qNum) {
                     if(s.startsWith('<div')) return s;
                     if(s.startsWith('<br>')) return s + smartHighlight(s.replace(/^<br>/, ''));
                     
-                    // INTELLIGENT PARAGRAPH BREAKING
                     if (s.length > 350) {
                         let sentences = s.match(/[^.!?]+[.!?]+["']?|[^.!?]+$/g);
                         if(sentences) {
@@ -487,7 +495,8 @@ function saveCurrentNote(val) {
 }
 
 function selectOption(o) { if(questions[qIndex].sel) return; questions[qIndex].sel = o; questions[qIndex].flag = false; loadQuestion(); }
-function toggleGuessState() { if(questions[qIndex].sel) return; questions[qIndex].guess = document.getElementById("guessCheck").checked; }
+// UPDATED: Guess toggle now always works
+function toggleGuessState() { questions[qIndex].guess = document.getElementById("guessCheck").checked; }
 function toggleFlag() { questions[qIndex].flag = !questions[qIndex].flag; loadQuestion(); }
 function next() { if(qIndex < questions.length - 1) { qIndex++; loadQuestion(); } }
 function prev() { if(qIndex > 0) { qIndex--; loadQuestion(); } }
