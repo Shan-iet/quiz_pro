@@ -157,6 +157,19 @@ function startResumeSession() {
             }
 
             if(candidateQ.length === 0) return alert("No questions match your selection criteria!");
+            
+            // --- NEW: Reset Logic for Re-attempting ---
+            // Clears previous selection, flag, guess, and time spent so questions appear fresh.
+            if (mode === 'weakness' || mode === 'all_attempted') {
+                candidateQ.forEach(q => {
+                    q.sel = null;
+                    q.flag = false;
+                    q.guess = false;
+                    q.timeSpent = 0;
+                });
+            }
+            // ------------------------------------------
+
             if (doShuffle) shuffleArray(candidateQ);
 
             let activeQ = [];
