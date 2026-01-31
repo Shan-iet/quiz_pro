@@ -345,11 +345,12 @@ function openExplanationInTab(fullExplanation, qNum) {
         :root{--bg-color:#f8f9fa;--text-color:#2c3e50;--card-bg:#ffffff;--highlight-term:#d35400;--highlight-stmt-bg:rgba(39,174,96,0.1);--highlight-stmt-text:#27ae60;--tips-bg:#E8F8F5;--tips-border:#1abc9c;--tips-header:#16a085;--btn-bg:#34495e;}
         [data-theme="dark"]{--bg-color:#0f172a;--text-color:#e2e8f0;--card-bg:#1e293b;--highlight-term:#818cf8;--highlight-stmt-bg:rgba(16,185,129,0.2);--highlight-stmt-text:#34d399;--tips-bg:#1e293b;--tips-border:#10b981;--tips-header:#34d399;--btn-bg:#4f46e5;}
         
+        html, body { width: 100%; margin: 0; padding: 0; }
+
         body {
             background:var(--bg-color);
             color:var(--text-color);
             font-family:'Segoe UI',sans-serif;
-            margin:0;
             padding: 20px 0; /* Vertical padding only, let container handle horizontal width */
             line-height:1.8;
             font-size: 18px; 
@@ -493,6 +494,11 @@ function openExplanationInTab(fullExplanation, qNum) {
         </script>
     </body>
     </html>`);
+    
+    // IMPORTANT FIX: 
+    // Closing the document stream forces the browser to apply the viewport and CSS immediately.
+    // Without this, mobile browsers may keep the page in "loading" state and render at desktop width.
+    win.document.close();
 }
 
 function saveCurrentNote(val) { 
