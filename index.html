@@ -63,8 +63,16 @@
 
     <div id="quiz" class="card hidden">
       <div class="quiz-header">
-        <div class="header-left"><span id="questionCounter" class="badge">Q1</span><span id="sectionBadge" class="section-badge">General</span><span id="questionTimer" class="timer-pill">00s</span></div>
-        <div class="header-right"><span id="totalTimer" class="total-time">00:00</span><button class="btn btn-exit" onclick="exitSession()">💾 Save & Exit</button></div>
+        <div class="header-left">
+            <span id="questionCounter" class="badge">Q1</span>
+            <span id="sectionBadge" class="section-badge">General</span>
+            <span id="questionTimer" class="timer-pill">00s</span>
+        </div>
+        <div class="header-right">
+            <span id="totalTimer" class="total-time">00:00</span>
+            <button id="showSidebarBtn" class="btn-xs btn-secondary hidden" onclick="toggleSidebarView()" title="Show Sidebar">◀ Tools</button>
+            <button class="btn btn-exit" onclick="exitSession()">💾 Save & Exit</button>
+        </div>
       </div>
       <div class="progress-bar-bg"><div id="progressBar"></div></div>
       <div class="question-area"><h2 id="question"></h2></div>
@@ -91,11 +99,15 @@
   </main>
 
   <aside id="sidebar" class="sidebar hidden">
+      <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+          <button class="sidebar-close-btn" onclick="toggleSidebarView()">▶ Minimize</button>
+      </div>
+
       <div class="sidebar-section">
          <div class="sidebar-header-row"><span class="sidebar-title">⚙️ Preference</span><button class="btn-xs btn-secondary toggle-btn" onclick="toggleSection('settingsPanel', this)">_</button></div>
-         <div id="settingsPanel" class="settings-panel hidden">
-            <div class="setting-row"><label>Size</label><input type="range" min="14" max="24" value="16" oninput="changeFontSize(this.value)"></div>
-            <div class="setting-row"><label>Font</label><select onchange="changeFontFamily(this.value)"><option value="'Segoe UI', sans-serif">Modern</option><option value="'Times New Roman', serif">Classic</option></select></div>
+         <div id="settingsPanel" class="settings-panel">
+            <div class="setting-row"><label>Size (px)</label><input type="number" min="12" max="32" value="20" style="width:60px; padding:2px; border-radius:4px; border:1px solid #444; background:#0f172a; color:white;" oninput="changeFontSize(this.value)"></div>
+            <div class="setting-row"><label>Font</label><select onchange="changeFontFamily(this.value)"><option value="'Segoe UI', sans-serif">Modern</option><option value="'Times New Roman', serif">Classic</option><option value="'Courier New', monospace">Mono</option></select></div>
          </div>
       </div>
       <div class="sidebar-section">

@@ -19,6 +19,31 @@ function updateFileName(input, displayId) {
     else document.getElementById(displayId).innerText = input.files[0]?.name || "Select File"; 
 }
 
+/* --- UI PREFERENCES & TOGGLES --- */
+function toggleSidebarView() {
+    const container = document.querySelector('.app-container');
+    const showBtn = document.getElementById('showSidebarBtn');
+    
+    // Toggle the class on the main container
+    container.classList.toggle('collapsed');
+    
+    // Toggle visibility of the "Show Sidebar" button in header
+    if (container.classList.contains('collapsed')) {
+        showBtn.classList.remove('hidden');
+    } else {
+        showBtn.classList.add('hidden');
+    }
+}
+
+function changeFontSize(size) {
+    if(!size || size < 10) return;
+    document.documentElement.style.setProperty('--q-font-size', size + 'px');
+}
+
+function changeFontFamily(font) {
+    document.documentElement.style.setProperty('--q-font-family', font);
+}
+
 /* --- SESSION MGMT --- */
 function startNewSession() {
   const fileInput = document.getElementById("fileInput");
@@ -108,7 +133,7 @@ function startResumeSession() {
             const tempSyncData = JSON.parse(e.target.result);
             const mode = document.querySelector('input[name="resumeMode"]:checked').value;
             const doShuffle = document.getElementById('resumeShuffle').checked;
-            const resumeLimitInput = document.getElementById('resumeLimit').value; // New Input
+            const resumeLimitInput = document.getElementById('resumeLimit').value; 
 
             let previousActive = tempSyncData.questions || [];
             let previousUnused = tempSyncData.unusedQuestions || [];
@@ -279,24 +304,59 @@ function openExplanationInTab(fullExplanation, qNum) {
     const mainExp = parts[0];
     const tips = parts.length > 1 ? parts[1] : null;
     const win = window.open("", "_blank");
-    win.document.write(`<!DOCTYPE html><html><head><title>Q${qNum} Analysis</title><style>
+    win.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <title>Q${qNum} Analysis</title>
+    <style>
         * { box-sizing: border-box; }
         :root{--bg-color:#f8f9fa;--text-color:#2c3e50;--card-bg:#ffffff;--highlight-term:#d35400;--highlight-stmt-bg:rgba(39,174,96,0.1);--highlight-stmt-text:#27ae60;--tips-bg:#E8F8F5;--tips-border:#1abc9c;--tips-header:#16a085;--btn-bg:#34495e;}
         [data-theme="dark"]{--bg-color:#0f172a;--text-color:#e2e8f0;--card-bg:#1e293b;--highlight-term:#818cf8;--highlight-stmt-bg:rgba(16,185,129,0.2);--highlight-stmt-text:#34d399;--tips-bg:#1e293b;--tips-border:#10b981;--tips-header:#34d399;--btn-bg:#4f46e5;}
         body{background:var(--bg-color);color:var(--text-color);font-family:'Segoe UI',sans-serif;padding:0;margin:0;line-height:1.8;transition:0.3s;}
+        
+        /* UPDATED CONTAINER: FORCE 96% WIDTH */
         .container{
-            width: 96%; max-width: 96%; min-height: 100vh;
-            margin: 10px auto; background:var(--card-bg); padding:20px;
-            border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.1);
+            width: 96%; 
+            max-width: 96%; 
+            min-height: 100vh;
+            margin: 10px auto; 
+            background:var(--card-bg); 
+            padding:20px;
+            border-radius:12px; 
+            box-shadow:0 4px 15px rgba(0,0,0,0.1);
         }
-        @media screen and (min-width: 768px) { .container { width: 94%; max-width: 880px; margin: 20px auto; padding: 40px; min-height: auto; } }
+        
+        @media screen and (min-width: 768px) { 
+            .container { 
+                /* Removed max-width restriction */
+                margin: 20px auto; 
+                padding: 40px; 
+                min-height: auto; 
+            } 
+        }
+
         .header-row{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #ccc;padding-bottom:15px;margin-bottom:20px;}
         .theme-toggle{background:transparent;border:1px solid var(--text-color);color:var(--text-color);padding:5px 15px;border-radius:20px;cursor:pointer;}
         .highlight-term{color:var(--highlight-term);font-weight:bold;}
         .highlight-statement{color:var(--highlight-stmt-text);background:var(--highlight-stmt-bg);padding:2px 6px;border-radius:4px;font-weight:bold;}
         .tips-box{margin-top:30px;background:var(--tips-bg);border-left:5px solid:var(--tips-border);padding:20px;border-radius:4px;}
         .close-btn{width:100%;margin-top:30px;padding:12px;background:var(--btn-bg);color:white;border:none;border-radius:8px;cursor:pointer;font-size:16px;}
-    </style></head><body data-theme="dark"><div class="container"><div class="header-row"><h1>Question ${qNum} Analysis</h1><button class="theme-toggle" onclick="document.body.setAttribute('data-theme',document.body.getAttribute('data-theme')==='dark'?'light':'dark')">🌗 Theme</button></div><div>${processTextSmartly(mainExp)}</div>${tips ? `<div class="tips-box"><strong>💡 TIPS:</strong> ${processTextSmartly(tips)}</div>` : ''}<button class="close-btn" onclick="window.close()">Close & Resume</button></div><script>function smartHighlight(t){ t=t.replace(/(\\b\\d{4}\\b|Article \\d+|Section \\d+)/gi,'<span class="highlight-term">$1</span>');return t.replace(/(Option [a-d] is [a-z ]*correct:?)/gi,'<span class="highlight-statement">$1</span>');}function processTextSmartly(t){ return t.split('||LOGIC_SPLIT||').map(s=>'<p>'+smartHighlight(s)+'</p>').join(''); }</script></body></html>`);
+    </style>
+    </head>
+    <body data-theme="dark">
+        <div class="container">
+            <div class="header-row"><h1>Question ${qNum} Analysis</h1><button class="theme-toggle" onclick="document.body.setAttribute('data-theme',document.body.getAttribute('data-theme')==='dark'?'light':'dark')">🌗 Theme</button></div>
+            <div>${processTextSmartly(mainExp)}</div>
+            ${tips ? `<div class="tips-box"><strong>💡 TIPS:</strong> ${processTextSmartly(tips)}</div>` : ''}
+            <button class="close-btn" onclick="window.close()">Close & Resume</button>
+        </div>
+        <script>
+            function smartHighlight(t){ t=t.replace(/(\\b\\d{4}\\b|Article \\d+|Section \\d+)/gi,'<span class="highlight-term">$1</span>');return t.replace(/(Option [a-d] is [a-z ]*correct:?)/gi,'<span class="highlight-statement">$1</span>');}
+            function processTextSmartly(t){ return t.split('||LOGIC_SPLIT||').map(s=>'<p>'+smartHighlight(s)+'</p>').join(''); }
+        </script>
+    </body>
+    </html>`);
 }
 
 function saveCurrentNote(val) { 
