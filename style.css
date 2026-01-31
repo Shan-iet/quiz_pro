@@ -16,6 +16,7 @@
   
   /* Dynamic Preferences Defaults */
   --q-font-size: 20px;
+  --exp-font-size: 17px; /* Default ~1.05rem */
   --q-font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
 
@@ -235,7 +236,17 @@ input[type="file"] { display: none; }
     font-size: 0.85rem; 
 }
 
-.beautified-explanation { color: #cbd5e1; line-height: 1.6; font-size: 0.85rem; }
+/* --- UPDATED FONT SIZES --- */
+/* Uses configurable variable --exp-font-size */
+#feedbackStatus strong {
+    font-size: calc(var(--exp-font-size) * 1.2);
+}
+
+.beautified-explanation { 
+    color: #cbd5e1; 
+    line-height: 1.6; 
+    font-size: var(--exp-font-size);
+}
 
 /* Highlight Classes */
 .highlight-term { color: #818cf8; font-weight: 700; }

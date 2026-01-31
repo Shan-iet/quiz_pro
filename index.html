@@ -109,10 +109,25 @@
          <div class="sidebar-header-row"><span class="sidebar-title">⚙️ Preference</span><button class="btn-xs btn-secondary toggle-btn" onclick="toggleSection('settingsPanel', this)">_</button></div>
          <div id="settingsPanel" class="settings-panel">
             <div class="setting-row">
-                <label>Size (px)</label>
+                <label>Q Size (px)</label>
                 <input type="number" min="12" max="32" value="20" style="width:60px; padding:2px; border-radius:4px; border:1px solid #444; background:#0f172a; color:white;" oninput="changeFontSize(this.value)">
             </div>
-            <div class="setting-row"><label>Font</label><select onchange="changeFontFamily(this.value)"><option value="'Segoe UI', sans-serif">Modern</option><option value="'Times New Roman', serif">Classic</option><option value="'Courier New', monospace">Mono</option></select></div>
+            <div class="setting-row">
+                <label>Exp Size (px)</label>
+                <input type="number" min="12" max="32" value="17" style="width:60px; padding:2px; border-radius:4px; border:1px solid #444; background:#0f172a; color:white;" oninput="changeExpFontSize(this.value)">
+            </div>
+            <div class="setting-row">
+                <label>Font</label>
+                <select onchange="changeFontFamily(this.value)">
+                    <option value="'Segoe UI', sans-serif">Modern (Segoe)</option>
+                    <option value="'Times New Roman', serif">Classic (Times)</option>
+                    <option value="'Courier New', monospace">Mono (Code)</option>
+                    <option value="'Verdana', sans-serif">Verdana</option>
+                    <option value="'Georgia', serif">Georgia</option>
+                    <option value="'Arial', sans-serif">Arial</option>
+                    <option value="'Trebuchet MS', sans-serif">Trebuchet</option>
+                </select>
+            </div>
          </div>
       </div>
       <div class="sidebar-section">

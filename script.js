@@ -36,8 +36,46 @@ function changeFontSize(size) {
     document.documentElement.style.setProperty('--q-font-size', size + 'px');
 }
 
+function changeExpFontSize(size) {
+    if(!size || size < 10) return;
+    document.documentElement.style.setProperty('--exp-font-size', size + 'px');
+}
+
 function changeFontFamily(font) {
     document.documentElement.style.setProperty('--q-font-family', font);
+}
+
+/* --- HELPER: SMART FILENAME GENERATOR --- */
+function generateSmartFilename(files) {
+    // 1. Extract clean names
+    const names = Array.from(files).map(f => f.name.replace(/\.[^/.]+$/, ""));
+    
+    // 2. Identify Prefixes
+    const prefixCounts = {};
+    names.forEach(name => {
+        const prefix = name.split('_')[0]; 
+        prefixCounts[prefix] = (prefixCounts[prefix] || 0) + 1;
+    });
+
+    // 3. Build Grouped Name List
+    let finalParts = [];
+    let processedPrefixes = new Set();
+
+    names.forEach(name => {
+        const prefix = name.split('_')[0];
+        
+        if (prefixCounts[prefix] > 1) {
+            if (!processedPrefixes.has(prefix)) {
+                finalParts.push(prefix);
+                processedPrefixes.add(prefix);
+            }
+        } else {
+            finalParts.push(name);
+        }
+    });
+
+    // 4. Join components
+    return finalParts.join("_");
 }
 
 /* --- SESSION MGMT --- */
@@ -52,7 +90,9 @@ function startNewSession() {
   const userNeg = parseFloat(document.getElementById("negInput").value) || 0.55;
 
   let allQuestions = [];
-  const fileNames = Array.from(files).map(f => f.name.replace(/\.[^/.]+$/, "")).join("_");
+  
+  // LOGIC: Smart Name Generation
+  const smartName = generateSmartFilename(files);
 
   const readFile = (file) => {
       return new Promise((resolve) => {
@@ -95,8 +135,8 @@ function startNewSession() {
 
       activeSession = { 
           status: "in-progress", 
-          title: files.length > 1 ? "Multi-Section Session" : fileNames,
-          originalFileName: fileNames,
+          title: files.length > 1 ? "Multi-Section Session" : smartName,
+          originalFileName: smartName, 
           questions: activeQ,
           unusedQuestions: unusedQ,
           qIndex: 0, totalSeconds: 0,
@@ -158,8 +198,6 @@ function startResumeSession() {
 
             if(candidateQ.length === 0) return alert("No questions match your selection criteria!");
             
-            // --- NEW: Reset Logic for Re-attempting ---
-            // Clears previous selection, flag, guess, and time spent so questions appear fresh.
             if (mode === 'weakness' || mode === 'all_attempted') {
                 candidateQ.forEach(q => {
                     q.sel = null;
@@ -168,7 +206,6 @@ function startResumeSession() {
                     q.timeSpent = 0;
                 });
             }
-            // ------------------------------------------
 
             if (doShuffle) shuffleArray(candidateQ);
 
@@ -210,14 +247,8 @@ function loadSession() {
 function formatQuestionText(text) {
     if (!text) return "";
     let formatted = text;
-    
-    // 1. Force break after Colons
     formatted = formatted.replace(/(:)\s+/g, '$1<br>');
-
-    // 2. Break before "Which of the statements..."
     formatted = formatted.replace(/(\s)(Which\s+of\s+the\s+(?:following\s+)?statements|Select\s+the\s+correct|Choose\s+the\s+correct|Identify\s+the\s+correct)/gi, '<br><br>$2');
-
-    // 3. Bullets & Points
     formatted = formatted.replace(/([^\n>])\s*([“"][^”"]{30,}[”"])/g, '$1<br><span class="q-quote">$2</span>');
     formatted = formatted.replace(/(\s|^)((?:I{1,3}|IV|V|VI{0,3}|IX|X)\.)\s+/g, '<br><span class="q-point">$2&nbsp;</span>');
     formatted = formatted.replace(/(\s|^)(\(?\d+\.)\s+/g, '<br><span class="q-point">$2&nbsp;</span>');
@@ -229,7 +260,6 @@ function formatQuestionText(text) {
     return formatted;
 }
 
-// Main smart highlight
 function smartHighlight(text) {
     if (!text) return "";
     let processed = text;
@@ -242,22 +272,14 @@ function smartHighlight(text) {
 function processTextSmartly(text) {
     if (!text) return "";
     let processed = text;
-    
-    // 1. Formulas
     processed = processed.replace(/([a-zA-Z\s\(\)\$\.]+=[a-zA-Z0-9\s\(\)\+\-\$\.]+)(?=\.|\n|<|$)/g, '||LOGIC_SPLIT||<div class="formula-box">$1</div>||LOGIC_SPLIT||');
-    
-    // 2. Headings
     processed = processed.replace(/(?:^|\.\s+|\>\s*)([A-Z][^.:\n<]+:)(?=\\s)/g, '<br><strong class="highlight-term">$1</strong><br>');
-
-    // 3. Logic Splits
     processed = processed.replace(/(Pair [IVX\d]+ is (?:in)?correct(?: answer)?|Statement \d+ is (?:in)?correct(?: answer)?|Option [a-d] is (?:in)?correct(?: answer)?)/gi, '||LOGIC_SPLIT||$1');
     processed = processed.replace(/\b([A-Z][a-z]+:)/g, '||LOGIC_SPLIT||$1');
     
     return processed.split('||LOGIC_SPLIT||').map(s => s.trim()).filter(s => s).map(p => {
         if(p.startsWith('<div')) return p;
         if(p.startsWith('<br>')) return p + smartHighlight(p.replace(/^<br>/, ''));
-        
-        // Intelligent Paragraph Break
         if (p.length > 350) {
             let sentences = p.match(/[^.!?]+[.!?]+["']?|[^.!?]+$/g);
             if(sentences) {
@@ -311,7 +333,6 @@ function loadQuestion() {
 
   const guessCheck = document.getElementById("guessCheck");
   guessCheck.checked = q.guess || false;
-  // UPDATED: Guess check is never disabled now
   guessCheck.disabled = false;
 
   const noteVal = q.notes || "";
@@ -343,174 +364,8 @@ function openExplanationInTab(fullExplanation, qNum) {
     const parts = fullExplanation.split("||TIPS||");
     const mainExp = parts[0];
     const tips = parts.length > 1 ? parts[1] : null;
-    
-    // Clean window open
     const win = window.open("", "_blank");
-    
-    win.document.write(`
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-    <title>Q${qNum} Analysis</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-    <style>
-        * { box-sizing: border-box; }
-        :root{--bg-color:#f8f9fa;--text-color:#2c3e50;--card-bg:#ffffff;--highlight-term:#d35400;--highlight-stmt-bg:rgba(39,174,96,0.1);--highlight-stmt-text:#27ae60;--tips-bg:#E8F8F5;--tips-border:#1abc9c;--tips-header:#16a085;--btn-bg:#34495e;}
-        [data-theme="dark"]{--bg-color:#0f172a;--text-color:#e2e8f0;--card-bg:#1e293b;--highlight-term:#818cf8;--highlight-stmt-bg:rgba(16,185,129,0.2);--highlight-stmt-text:#34d399;--tips-bg:#1e293b;--tips-border:#10b981;--tips-header:#34d399;--btn-bg:#4f46e5;}
-        
-        html, body { width: 100%; margin: 0; padding: 0; }
-
-        body {
-            background:var(--bg-color);
-            color:var(--text-color);
-            font-family:'Segoe UI',sans-serif;
-            padding: 20px 0; /* Vertical padding only, let container handle horizontal width */
-            line-height:1.8;
-            font-size: 18px; 
-            transition:0.3s;
-            display: flex;
-            flex-direction: column;
-            align-items: center; /* Centers the 96% wide container */
-            min-height: 100vh;
-        }
-        
-        .container {
-            width: 96%; 
-            max-width: 96%; /* Explicitly 96% for all screens */
-            min-height: 80vh; /* Do not force full 100vh, allow content to flow */
-            margin: 0 auto; 
-            background: var(--card-bg); 
-            padding: 40px;
-            border-radius: 12px; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        }
-
-        .header-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap; /* Wrap on narrow screens */
-            gap: 10px;
-            border-bottom: 2px solid #ccc;
-            padding-bottom: 15px;
-            margin-bottom: 20px;
-        }
-        h1 { margin: 0; font-size: 1.5rem; }
-
-        .theme-toggle{background:transparent;border:1px solid var(--text-color);color:var(--text-color);padding:5px 15px;border-radius:20px;cursor:pointer; font-size: 0.9rem;}
-        
-        .highlight-term{color:var(--highlight-term);font-weight:bold;}
-        .highlight-statement{color:var(--highlight-stmt-text);background:var(--highlight-stmt-bg);padding:2px 6px;border-radius:4px;font-weight:bold;}
-        
-        .tips-box{margin-top:30px;background:var(--tips-bg);border-left:5px solid:var(--tips-border);padding:20px;border-radius:4px;}
-        .close-btn{width:100%;margin-top:30px;padding:12px;background:var(--btn-bg);color:white;border:none;border-radius:8px;cursor:pointer;font-size:18px; font-weight:bold;}
-        
-        .formula-box {
-            background: rgba(0,0,0,0.2);
-            padding: 12px;
-            border-left: 4px solid var(--highlight-stmt-text);
-            font-family: 'Consolas', 'Monaco', monospace;
-            margin: 15px 0;
-            white-space: pre-wrap;
-            word-break: break-word; /* Handle normal text wrapping */
-            font-size: 0.95em;
-            overflow-x: auto; /* SCROLLBAR FOR LONG FORMULAS */
-        }
-        
-        p { margin-bottom: 1.2em; }
-
-        /* PORTRAIT / MOBILE FIXES */
-        @media screen and (max-width: 600px) {
-            body { padding: 10px 0; font-size: 16px; }
-            .container { 
-                padding: 15px; 
-                width: 96%;      /* FORCE 96% */
-                max-width: 96%;  /* FORCE 96% */
-                border-radius: 8px; /* Slightly rounded, better than 0 */
-                box-shadow: none; 
-            }
-            .header-row { align-items: flex-start; } 
-            h1 { font-size: 1.25rem; }
-            .formula-box { font-size: 0.85em; white-space: nowrap; } /* Force scroll for formulas on tiny screens */
-        }
-    </style>
-    </head>
-    <body data-theme="dark">
-        <div class="container">
-            <div class="header-row"><h1>Question ${qNum} Analysis</h1><button class="theme-toggle" onclick="document.body.setAttribute('data-theme',document.body.getAttribute('data-theme')==='dark'?'light':'dark')">🌗 Theme</button></div>
-            <div>${processTextSmartly(mainExp)}</div>
-            ${tips ? `<div class="tips-box"><strong>💡 TIPS:</strong> ${processTextSmartly(tips)}</div>` : ''}
-            <button class="close-btn" onclick="window.close()">Close Tab</button>
-        </div>
-        <script>
-            function smartHighlight(t) {
-                // 1. ACTS
-                t = t.replace(/\\b((?:The\\s|\\d+(?:st|nd|rd|th)?\\s)?[A-Z][\\w\\s\\-]*(?:Act|Amendment|Bill|Rules|Code|Ordinance|Policy)(?:,?\\s\\d{4})?)\\b/g, '<span class="highlight-term">$1</span>');
-
-                // 2. BODIES
-                t = t.replace(/\\b([A-Z][\\w\\s\\.]*(?:Committee|Commission|Tribunal|Council|Aayog|Authority|Bench))\\b/g, '<span class="highlight-term">$1</span>');
-                t = t.replace(/\\b(\\d+-member\\s(?:bench|committee|panel|body))\\b/gi, '<span class="highlight-term">$1</span>');
-
-                // 3. HISTORY
-                t = t.replace(/\\b((?:First|Second|Third|The)?\\s?(?:Battle|Siege|Treaty|War|Revolt|Mutiny)\\s(?:of\\s)?[A-Z][\\w\\s\\-]*(?:\\s\\(\\d{4}(?:-\\d{2,4})?\\))?)\\b/g, '<span class="highlight-term">$1</span>');
-                t = t.replace(/\\b([A-Z][\\w\\s\\-]*(?:War|Battle|Revolution|Revolt|Mutiny|Movement)(?:\\s\\(\\d{4}(?:-\\d{2,4})?\\))?)\\b/g, '<span class="highlight-term">$1</span>');
-
-                // 4. DYNASTIES & DIPLOMACY
-                t = t.replace(/\\b([A-Z][a-zA-Z\\s\\-]*(?:Dynasty|Empire|Kingdom|Sultanate|Caliphate))\\b/g, '<span class="highlight-term">$1</span>');
-                t = t.replace(/\\b([A-Z][\\w\\s\\-]*(?:Conference|Summit|Pact|Accord|Convention|Protocol)(?:\\s\\d{4})?)\\b/g, '<span class="highlight-term">$1</span>');
-
-                // 5. LEGAL CASES
-                t = t.replace(/\\b([A-Z][\\w\\s\\.]+\\svs\\.?\\s[A-Z][\\w\\s\\.]+(?:\\s\\(\\d{4}\\))?)\\b/g, '<span class="highlight-term">$1</span>');
-
-                // 6. DATA
-                t = t.replace(/\\b(\\d+(?:\\.\\d+)?%\\s(?:[a-zA-Z]+\\s?){1,4})\\b/g, '<span class="highlight-term">$1</span>');
-                t = t.replace(/\\b(\\d+(?:\\.\\d+)?\\s(?:Lakh|Lac|Cr|Crore|Million|Billion|Trillion|tonnes|liters|km)\\s[\\w\\s]{2,15})\\b/gi, '<span class="highlight-term">$1</span>');
-
-                // 7. ARTICLES/SECTIONS
-                t = t.replace(/(\\b(?:17|18|19|20)\\d{2}\\b|Article \\d+|Section \\d+|Schedule \\d+)/gi, '<span class="highlight-term">$1</span>');
-
-                return t.replace(/(Option [a-d] is [a-z ]*correct(?: answer)?)/gi, '<span class="highlight-statement">$1</span>');
-            }
-
-            function processTextSmartly(t) { 
-                 // 1. FORMULAS
-                 t = t.replace(/([a-zA-Z\\s\\(\\)\\$\\.]+=[a-zA-Z0-9\\s\\(\\)\\+\\-\\$\\.]+)(?=\\.|\\n|<|$)/g, '||LOGIC_SPLIT||<div class="formula-box">$1</div>||LOGIC_SPLIT||');
-                 
-                 // 2. HEADINGS
-                 t = t.replace(/(?:^|\\.\\s+|\\>\\s*)([A-Z][^.:\\n<]+:)(?=\\s)/g, '<br><strong class="highlight-term">$1</strong><br>');
-
-                 // 3. LOGIC SPLITS
-                 t = t.replace(/(Option [a-d] is (?:in)?correct(?: answer)?)/gi, '||LOGIC_SPLIT||$1');
-                 
-                 return t.split('||LOGIC_SPLIT||').map(s=> {
-                    if(s.startsWith('<div')) return s;
-                    if(s.startsWith('<br>')) return s + smartHighlight(s.replace(/^<br>/, ''));
-                    
-                    if (s.length > 350) {
-                        let sentences = s.match(/[^.!?]+[.!?]+["']?|[^.!?]+$/g);
-                        if(sentences) {
-                            let chunks = [], currentChunk = "";
-                            sentences.forEach(sent => {
-                                currentChunk += sent;
-                                if(currentChunk.length > 300) {
-                                    chunks.push('<p>'+smartHighlight(currentChunk)+'</p>');
-                                    currentChunk = "";
-                                }
-                            });
-                            if(currentChunk) chunks.push('<p>'+smartHighlight(currentChunk)+'</p>');
-                            return chunks.join("");
-                        }
-                    }
-                    return '<p>'+smartHighlight(s)+'</p>';
-                 }).join(''); 
-            }
-        </script>
-    </body>
-    </html>`);
-    
-    // IMPORTANT FIX: 
-    // Closing the document stream forces the browser to apply the viewport and CSS immediately.
-    // Without this, mobile browsers may keep the page in "loading" state and render at desktop width.
+    win.document.write(`<!DOCTYPE html><html lang="en"><head><title>Q${qNum} Analysis</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>*{box-sizing:border-box}:root{--bg-color:#f8f9fa;--text-color:#2c3e50;--card-bg:#ffffff;--highlight-term:#d35400;--highlight-stmt-bg:rgba(39,174,96,0.1);--highlight-stmt-text:#27ae60;--tips-bg:#E8F8F5;--tips-border:#1abc9c;--btn-bg:#34495e}[data-theme="dark"]{--bg-color:#0f172a;--text-color:#e2e8f0;--card-bg:#1e293b;--highlight-term:#818cf8;--highlight-stmt-bg:rgba(16,185,129,0.2);--highlight-stmt-text:#34d399;--tips-bg:#1e293b;--tips-border:#10b981;--btn-bg:#4f46e5}body{background:var(--bg-color);color:var(--text-color);font-family:'Segoe UI',sans-serif;padding:20px 0;line-height:1.8;font-size:18px;display:flex;flex-direction:column;align-items:center;min-height:100vh}.container{width:96%;max-width:96%;min-height:80vh;margin:0 auto;background:var(--card-bg);padding:40px;border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,0.1)}.header-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;border-bottom:2px solid #ccc;padding-bottom:15px;margin-bottom:20px}h1{margin:0;font-size:1.5rem}.theme-toggle{background:transparent;border:1px solid var(--text-color);color:var(--text-color);padding:5px 15px;border-radius:20px;cursor:pointer;font-size:0.9rem}.highlight-term{color:var(--highlight-term);font-weight:bold}.highlight-statement{color:var(--highlight-stmt-text);background:var(--highlight-stmt-bg);padding:2px 6px;border-radius:4px;font-weight:bold}.tips-box{margin-top:30px;background:var(--tips-bg);border-left:5px solid:var(--tips-border);padding:20px;border-radius:4px}.close-btn{width:100%;margin-top:30px;padding:12px;background:var(--btn-bg);color:white;border:none;border-radius:8px;cursor:pointer;font-size:18px;font-weight:bold}.formula-box{background:rgba(0,0,0,0.2);padding:12px;border-left:4px solid var(--highlight-stmt-text);font-family:'Consolas','Monaco',monospace;margin:15px 0;white-space:pre-wrap;word-break:break-word;font-size:0.95em;overflow-x:auto}p{margin-bottom:1.2em}@media screen and (max-width:600px){body{padding:10px 0;font-size:16px}.container{padding:15px;border-radius:8px;box-shadow:none}h1{font-size:1.25rem}.formula-box{font-size:0.85em;white-space:nowrap}}</style></head><body data-theme="dark"><div class="container"><div class="header-row"><h1>Question ${qNum} Analysis</h1><button class="theme-toggle" onclick="document.body.setAttribute('data-theme',document.body.getAttribute('data-theme')==='dark'?'light':'dark')">🌗 Theme</button></div><div>${processTextSmartly(mainExp)}</div>${tips ? `<div class="tips-box"><strong>💡 TIPS:</strong> ${processTextSmartly(tips)}</div>` : ''}<button class="close-btn" onclick="window.close()">Close Tab</button></div><script>function smartHighlight(t){t=t.replace(/\\b((?:The\\s|\\d+(?:st|nd|rd|th)?\\s)?[A-Z][\\w\\s\\-]*(?:Act|Amendment|Bill|Rules|Code|Ordinance|Policy)(?:,?\\s\\d{4})?)\\b/g,'<span class=\"highlight-term\">$1</span>');t=t.replace(/\\b([A-Z][\\w\\s\\.]*(?:Committee|Commission|Tribunal|Council|Aayog|Authority|Bench))\\b/g,'<span class=\"highlight-term\">$1</span>');t=t.replace(/\\b(\\d+-member\\s(?:bench|committee|panel|body))\\b/gi,'<span class=\"highlight-term\">$1</span>');return t.replace(/(Option [a-d] is [a-z ]*correct(?: answer)?)/gi,'<span class=\"highlight-statement\">$1</span>');}function processTextSmartly(t){t=t.replace(/([a-zA-Z\\s\\(\\)\\$\\.]+=[a-zA-Z0-9\\s\\(\\)\\+\\-\\$\\.]+)(?=\\.|\\n|<|$)/g,'||LOGIC_SPLIT||<div class=\"formula-box\">$1</div>||LOGIC_SPLIT||');t=t.replace(/(?:^|\\.\\s+|\\>\\s*)([A-Z][^.:\\n<]+:)(?=\\s)/g,'<br><strong class=\"highlight-term\">$1</strong><br>');t=t.replace(/(Option [a-d] is (?:in)?correct(?: answer)?)/gi,'||LOGIC_SPLIT||$1');return t.split('||LOGIC_SPLIT||').map(s=>{if(s.startsWith('<div'))return s;if(s.startsWith('<br>'))return s+smartHighlight(s.replace(/^<br>/,''));return '<p>'+smartHighlight(s)+'</p>';}).join('');}<\/script></body></html>`);
     win.document.close();
 }
 
@@ -524,7 +379,6 @@ function saveCurrentNote(val) {
 }
 
 function selectOption(o) { if(questions[qIndex].sel) return; questions[qIndex].sel = o; questions[qIndex].flag = false; loadQuestion(); }
-// UPDATED: Guess toggle now always works
 function toggleGuessState() { questions[qIndex].guess = document.getElementById("guessCheck").checked; }
 function toggleFlag() { questions[qIndex].flag = !questions[qIndex].flag; loadQuestion(); }
 function next() { if(qIndex < questions.length - 1) { qIndex++; loadQuestion(); } }
@@ -565,7 +419,6 @@ function toggleSection(id, btn) {
     btn.innerText = el.classList.contains("hidden") ? "+" : "_";
 }
 
-/* --- FINISH & DOWNLOAD --- */
 function finishQuiz() {
   if (!confirm("Submit answers?")) return;
   pauseAllTimers(); clearInterval(autoSaveInterval);
@@ -591,11 +444,8 @@ function finishQuiz() {
   
   saveToHistory();
   showReport();
-
-  // 1. AUTO DOWNLOAD PDF
   generateAnalyticPDF();
 
-  // 2. CONDITIONAL SYNC JSON DOWNLOAD
   if (activeSession.unusedQuestions && activeSession.unusedQuestions.length > 0) {
       exitSession(true);
   }
@@ -605,11 +455,15 @@ function downloadSyncFile() {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(activeSession));
     const dlNode = document.createElement('a');
     
-    // Naming: [OriginalNames]_[Timestamp]_sync.json
+    // UPDATED TIMESTAMP FORMAT: DD-MM-YYYY
     const now = new Date();
-    const timestamp = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, '0') + "-" + String(now.getDate()).padStart(2, '0') + "_" + String(now.getHours()).padStart(2, '0') + "-" + String(now.getMinutes()).padStart(2, '0');
-    const baseName = activeSession.originalFileName || activeSession.title || "quiz";
+    const timestamp = String(now.getDate()).padStart(2, '0') + "-" + String(now.getMonth() + 1).padStart(2, '0') + "-" + now.getFullYear() + "_" + String(now.getHours()).padStart(2, '0') + "-" + String(now.getMinutes()).padStart(2, '0');
     
+    let baseName = activeSession.originalFileName || activeSession.title || "quiz";
+    if (baseName.length > 200) {
+        baseName = baseName.substring(0, 200) + "...";
+    }
+
     dlNode.setAttribute("href", dataStr);
     dlNode.setAttribute("download", `${baseName}_${timestamp}_sync.json`);
     dlNode.click();
@@ -629,7 +483,6 @@ function showReport() {
   const percentage = maxScore > 0 ? (r.score / maxScore) * 100 : 0;
   const avgTime = r.total > 0 ? totalSeconds / r.total : 0;
 
-  // Overall Summary Table
   let html = `
   <table class="dark-table" style="margin-bottom: 30px; width: 100%;">
     <thead><tr><th colspan="2" style="text-align:center; font-size: 1.1rem;">🏁 Overall Summary</th></tr></thead>
@@ -685,16 +538,30 @@ async function generateAnalyticPDF() {
   const correctScoreVal = r.c * s.mark;
   const wrongScoreVal = r.w * s.neg;
 
-  doc.setFillColor(30, 41, 59); doc.rect(0, 0, 210, 30, 'F'); doc.setTextColor(255); doc.setFontSize(16); doc.text(activeSession.title.substring(0,35), 14, 19);
-  doc.setFontSize(10); doc.text(`Score: ${fmt(r.score)} | Accuracy: ${fmt(accuracyVal)}%`, 140, 19);
+  doc.setFillColor(44, 62, 80); 
+  doc.rect(0, 0, 210, 40, 'F');
+  doc.setTextColor(255);
+  doc.setFontSize(22);
+  doc.setFont("helvetica", "bold");
+  doc.text("Performance Report", 105, 18, { align: "center" });
+  
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Generated on: ${new Date().toLocaleString()}`, 105, 30, { align: "center" });
 
-  // 1. Overall
   const overallData = [ 
       ['Total Questions', r.total], ['Attempted', attempted], ['Accuracy', `${fmt(accuracyVal)}%`], ['Percentage', `${fmt(percentageVal)}%`], ['Avg Time / Question', `${fmt(avgTimeVal)}s`], ['Correct (+'+fmt(s.mark)+')', `${r.c} (+${fmt(correctScoreVal)})`], ['Wrong (-'+fmt(s.neg)+')', `${r.w} (-${fmt(wrongScoreVal)})`], ['FINAL SCORE', `${fmt(r.score)} / ${fmt(maxScoreVal)}`] 
   ];
-  doc.autoTable({ startY: 40, head: [['Metric', 'Value']], body: overallData, theme: 'grid', headStyles: { fillColor: [51, 65, 85] } });
+  
+  doc.autoTable({ 
+      startY: 50, 
+      head: [['Metric', 'Value']], 
+      body: overallData, 
+      theme: 'grid', 
+      headStyles: { fillColor: [52, 73, 94], textColor: 255, fontStyle: 'bold' },
+      styles: { fontSize: 10, cellPadding: 3, lineColor: [0,0,0], lineWidth: 0.1 }
+  });
 
-  // 2. Sectional
   const sectionRows = Object.keys(r.sections).map(k => {
       const sec = r.sections[k];
       const sAtt = sec.c + sec.w;
@@ -705,48 +572,84 @@ async function generateAnalyticPDF() {
       return [k, sec.total, sAtt, `${fmt(sAcc)}%`, `${fmt(sPerc)}%`, `${fmt(sAvg)}s`, sec.c, sec.w, fmt(sScore)];
   });
 
-  doc.text("Section-Wise Breakdown", 14, doc.lastAutoTable.finalY + 15);
-  doc.autoTable({ startY: doc.lastAutoTable.finalY + 20, head: [['Section', 'Tot', 'Att', 'Acc', '%', 'Time/Q', 'Cor', 'Wro', 'Score']], body: sectionRows, theme: 'grid', headStyles: { fillColor: [71, 85, 105] }, styles: { fontSize: 8 } });
+  doc.text("Section-Wise Analysis", 14, doc.lastAutoTable.finalY + 15);
+  doc.autoTable({ 
+      startY: doc.lastAutoTable.finalY + 20, 
+      head: [['Section', 'Tot', 'Att', 'Acc', '%', 'Time', 'Cor', 'Wro', 'Score']], 
+      body: sectionRows, 
+      theme: 'grid', 
+      headStyles: { fillColor: [41, 128, 185], textColor: 255 }, 
+      styles: { fontSize: 9, lineColor: [0,0,0], lineWidth: 0.1 } 
+  });
 
-  // 3. Questions (Full Text, Reverted Columns)
-  const qRows = questions.map((q, i) => [ 
-      `Q${i+1}`, 
-      q.q, // Full text
-      q.sel || '-', 
-      q.answer, 
-      q.sel === q.answer ? 'YES' : 'NO', 
-      q.timeSpent + "s"
-  ]);
+  doc.addPage();
+  doc.setFillColor(44, 62, 80); doc.rect(0, 0, 210, 20, 'F');
+  doc.setTextColor(255); doc.setFontSize(14); doc.text("Detailed Question Review", 14, 13);
+
+  const qRows = questions.map((q, i) => {
+      let status = "UNATTEMPTED";
+      if (q.sel) status = (q.sel === q.answer) ? "PASS" : "FAIL";
+      
+      return [ 
+          `Q${i+1}`, 
+          q.q, 
+          q.sel || '-', 
+          q.answer, 
+          status, 
+          q.timeSpent + "s"
+      ];
+  });
   
   doc.autoTable({ 
-      startY: doc.lastAutoTable.finalY + 15, 
-      head: [['#', 'Question', 'Yours', 'Key', 'Pass', 'Time']], 
+      startY: 30, 
+      head: [['#', 'Question Text', 'Your Ans', 'Correct', 'Status', 'Time']], 
       body: qRows, 
-      headStyles: { fillColor: [99, 102, 241] }, 
+      theme: 'grid',
+      headStyles: { fillColor: [44, 62, 80], textColor: 255, fontStyle: 'bold', halign: 'center' }, 
       columnStyles: { 
-          1: { cellWidth: 90 }, 
-          4: { halign: 'center' } 
+          0: { cellWidth: 15, halign: 'center', fontStyle: 'bold' }, 
+          1: { cellWidth: 95 }, 
+          2: { cellWidth: 20, halign: 'center' }, 
+          3: { cellWidth: 20, halign: 'center' }, 
+          4: { cellWidth: 20, halign: 'center', fontStyle: 'bold' }, 
+          5: { cellWidth: 15, halign: 'center' }  
       }, 
-      styles: { fontSize: 8, valign: 'middle', overflow: 'linebreak' }, 
+      styles: { fontSize: 9, valign: 'middle', overflow: 'linebreak', cellPadding: 3, lineColor: [0,0,0], lineWidth: 0.1 }, 
       didParseCell: function(data) { 
           if (data.section === 'body' && data.column.index === 4) { 
-              data.cell.styles.textColor = data.cell.raw === 'YES' ? [22, 163, 74] : [220, 38, 38]; 
+              if (data.cell.raw === 'PASS') data.cell.styles.textColor = [39, 174, 96]; 
+              else if (data.cell.raw === 'FAIL') data.cell.styles.textColor = [192, 57, 43]; 
+              else data.cell.styles.textColor = [127, 140, 141]; 
           } 
       } 
   });
 
-  // 4. Notes
   const notesQ = questions.filter(q => q.notes && q.notes.trim() !== "");
   if (notesQ.length > 0) {
-      doc.addPage(); doc.setFontSize(14); doc.setTextColor(0); doc.text("Personal Notes", 14, 20);
+      doc.addPage(); 
+      doc.setFontSize(16); doc.setTextColor(0); doc.text("Personal Notes", 14, 20);
       let y = 30;
       notesQ.forEach(q => {
-          doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.text(`Q: ${q.q.substring(0, 80)}...`, 14, y);
-          doc.setFont("helvetica", "normal"); const txt = doc.splitTextToSize(q.notes, 180); doc.text(txt, 14, y+5); y += (txt.length*5)+15; if(y>270){ doc.addPage(); y=20; }
+          doc.setFontSize(11); doc.setFont("helvetica", "bold"); doc.text(`Q: ${q.q.substring(0, 80)}...`, 14, y);
+          doc.setFont("helvetica", "normal"); 
+          doc.setFontSize(10);
+          const txt = doc.splitTextToSize(q.notes, 180); 
+          doc.text(txt, 14, y+6); 
+          y += (txt.length*5)+18; 
+          if(y>270){ doc.addPage(); y=20; }
       });
   }
 
-  doc.save(`${activeSession.title}_Report.pdf`);
+  // UPDATED TIMESTAMP FORMAT: DD-MM-YYYY
+  const now = new Date();
+  const timestamp = String(now.getDate()).padStart(2, '0') + "-" + String(now.getMonth() + 1).padStart(2, '0') + "-" + now.getFullYear() + "_" + String(now.getHours()).padStart(2, '0') + "-" + String(now.getMinutes()).padStart(2, '0');
+  
+  let baseName = activeSession.originalFileName || activeSession.title || "quiz";
+  if (baseName.length > 200) {
+      baseName = baseName.substring(0, 200) + "..."; 
+  }
+
+  doc.save(`${baseName}_${timestamp}_Report.pdf`);
 }
 
 function autoSave() { activeSession.qIndex = qIndex; activeSession.totalSeconds = totalSeconds; saveToHistory(); }
