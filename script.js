@@ -350,16 +350,20 @@ function openExplanationInTab(fullExplanation, qNum) {
             color:var(--text-color);
             font-family:'Segoe UI',sans-serif;
             margin:0;
-            padding: 20px; /* Base padding */
+            padding: 20px 0; /* Vertical padding only, let container handle horizontal width */
             line-height:1.8;
             font-size: 18px; 
             transition:0.3s;
+            display: flex;
+            flex-direction: column;
+            align-items: center; /* Centers the 96% wide container */
+            min-height: 100vh;
         }
         
         .container {
             width: 96%; 
-            max-width: 96%; /* Explicitly 96% */
-            min-height: 100vh;
+            max-width: 96%; /* Explicitly 96% for all screens */
+            min-height: 80vh; /* Do not force full 100vh, allow content to flow */
             margin: 0 auto; 
             background: var(--card-bg); 
             padding: 40px;
@@ -403,8 +407,14 @@ function openExplanationInTab(fullExplanation, qNum) {
 
         /* PORTRAIT / MOBILE FIXES */
         @media screen and (max-width: 600px) {
-            body { padding: 10px; font-size: 16px; }
-            .container { padding: 15px; width: 100%; border-radius: 0; box-shadow: none; }
+            body { padding: 10px 0; font-size: 16px; }
+            .container { 
+                padding: 15px; 
+                width: 96%;      /* FORCE 96% */
+                max-width: 96%;  /* FORCE 96% */
+                border-radius: 8px; /* Slightly rounded, better than 0 */
+                box-shadow: none; 
+            }
             .header-row { align-items: flex-start; } 
             h1 { font-size: 1.25rem; }
             .formula-box { font-size: 0.85em; white-space: nowrap; } /* Force scroll for formulas on tiny screens */

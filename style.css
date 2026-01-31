@@ -98,6 +98,44 @@ input[type="file"] { display: none; }
 .radio-title { display: block; font-weight: 700; font-size: 0.95rem; color: var(--text); }
 .radio-sub { display: block; font-size: 0.8rem; color: var(--text-muted); margin-top: 2px; }
 
+/* --- RECENT SESSIONS --- */
+.recent-section { margin-top: 30px; }
+
+.recent-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.recent-header h4 {
+    margin: 0;
+}
+
+#clearAllBtn {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+#clearAllBtn:hover {
+    background: #ef4444;
+    color: white;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+    border-color: #ef4444;
+}
+
 /* --- BUTTONS --- */
 .btn { border: none; cursor: pointer; font-weight: 700; padding: 10px 24px; border-radius: 8px; font-size: 0.9rem; transition: all 0.3s; letter-spacing: 0.5px; text-transform: uppercase; }
 .btn-primary.btn-glow { background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); color: white; box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4); }
