@@ -7,9 +7,27 @@ window.onload = () => {
     document.querySelector('.app-container').classList.remove('quiz-mode');
 };
 
-document.addEventListener('visibilitychange', () => {
-    if (document.hidden) pauseAllTimers();
-    else if (activeSession && activeSession.status === "in-progress") resumeAllTimers();
+/* --- ROBUST VISIBILITY HANDLER --- */
+function handleAppVisibility() {
+    if (document.hidden) {
+        // User left the tab -> Pause
+        pauseAllTimers();
+    } else {
+        // User is back -> Resume (only if quiz is in progress)
+        if (activeSession && activeSession.status === "in-progress") {
+            // Small delay ensures browser is fully ready
+            setTimeout(() => resumeAllTimers(), 100);
+        }
+    }
+}
+
+document.addEventListener('visibilitychange', handleAppVisibility);
+
+// Backup: Ensure timers resume when window regains focus (fixes frozen timer bug)
+window.addEventListener('focus', () => {
+    if (!document.hidden && activeSession && activeSession.status === "in-progress") {
+        resumeAllTimers();
+    }
 });
 
 function pauseAllTimers() { clearInterval(qTimer); clearInterval(totalTimer); clearInterval(questionDurationTimer); }
@@ -46,36 +64,50 @@ function changeFontFamily(font) {
 }
 
 /* --- HELPER: SMART FILENAME GENERATOR --- */
-function generateSmartFilename(files) {
-    // 1. Extract clean names
-    const names = Array.from(files).map(f => f.name.replace(/\.[^/.]+$/, ""));
+function generateSmartFilename(source) {
+    let names = [];
     
-    // 2. Identify Prefixes
-    const prefixCounts = {};
-    names.forEach(name => {
-        const prefix = name.split('_')[0]; 
-        prefixCounts[prefix] = (prefixCounts[prefix] || 0) + 1;
-    });
+    // 1. Handle Input: Can be FileList (from upload) or Array of Strings (from questions)
+    if (source instanceof FileList) {
+        names = Array.from(source).map(f => f.name.replace(/\.[^/.]+$/, ""));
+    } else if (Array.isArray(source)) {
+        names = source;
+    } else {
+        return "Quiz_Session";
+    }
 
-    // 3. Build Grouped Name List
-    let finalParts = [];
-    let processedPrefixes = new Set();
+    // 2. Process each name
+    const abbreviations = names.map(name => {
+        const cleanName = name.trim();
+        if(!cleanName) return "Q";
 
-    names.forEach(name => {
-        const prefix = name.split('_')[0];
+        // A. Get First Letter (The Subject Code: P, G, E, C)
+        const firstLetter = cleanName.charAt(0).toUpperCase();
         
-        if (prefixCounts[prefix] > 1) {
-            if (!processedPrefixes.has(prefix)) {
-                finalParts.push(prefix);
-                processedPrefixes.add(prefix);
-            }
+        // B. Check for Numbers
+        const numbers = cleanName.match(/\d+/g);
+
+        if (numbers) {
+            // Case 1: Numbers found (Polity_CH1 -> P1, Geo_CH-14 -> G14)
+            return firstLetter + numbers.join('');
         } else {
-            finalParts.push(name);
+            // Case 2: No numbers (CA_july -> C + J + y -> CJy)
+            const parts = cleanName.split('_');
+            
+            if (parts.length > 1) {
+                // Has underscore: use suffix logic
+                const suffix = parts[parts.length - 1]; // "july"
+                const sFirst = suffix.charAt(0).toUpperCase(); // "J"
+                const sLast = suffix.slice(-1); // "y"
+                return firstLetter + sFirst + sLast;
+            } else {
+                // Single word (History -> H + y -> Hy)
+                return firstLetter + cleanName.slice(-1);
+            }
         }
     });
 
-    // 4. Join components
-    return finalParts.join("_");
+    return abbreviations.join('_');
 }
 
 /* --- SESSION MGMT --- */
@@ -433,33 +465,46 @@ function loadQuestion() {
   const q = questions[qIndex];
   if (typeof q.timeSpent === 'undefined') q.timeSpent = 0;
 
+  // 1. Question Text & Header
   document.getElementById("questionCounter").innerText = `Q${qIndex + 1} / ${questions.length}`;
   document.getElementById("sectionBadge").innerText = q.section || 'General';
+  
+  // Add Flag Icon to text if flagged
   let qHtml = (q.flag ? "🚩 " : "") + formatQuestionText(q.q);
   if(q.source && q.source.trim() !== "") qHtml += `<span class="source-tag">Source: ${q.source}</span>`;
   document.getElementById("question").innerHTML = qHtml;
 
+  // 2. Options Generation
   const optionsContainer = document.getElementById("optionsContainer");
   optionsContainer.innerHTML = "";
+  
   Object.keys(q.options).forEach(key => {
       const btn = document.createElement("button");
       btn.className = "option-btn";
       btn.innerText = q.options[key];
       const normalizedKey = key.toUpperCase();
+      
+      // A. Always show "Selected" state (Blue in CSS) if user clicked this
       if (q.sel === normalizedKey) btn.classList.add("selected");
+      
+      // B. ONLY show Correct/Wrong colors if NOT flagged (Not in Doubt Mode)
       if (q.sel && !q.flag) {
           if (normalizedKey === q.answer) btn.classList.add("correct");
           else if (normalizedKey === q.sel) btn.classList.add("wrong");
       }
+      
+      // Disable buttons if an option is chosen (prevent changing answer)
       btn.disabled = (q.sel !== null); 
       btn.onclick = () => selectOption(normalizedKey);
       optionsContainer.appendChild(btn);
   });
 
+  // 3. Mark as Guess Checkbox UI
   const guessCheck = document.getElementById("guessCheck");
   guessCheck.checked = q.guess || false;
   guessCheck.disabled = false;
 
+  // 4. Notes UI
   const noteVal = q.notes || "";
   const words = noteVal.trim() ? noteVal.trim().split(/\s+/).length : 0;
   const setNoteUI = (id, countId) => {
@@ -469,9 +514,13 @@ function loadQuestion() {
   setNoteUI("noteInput", "sidebarWordCount");
   setNoteUI("mobileNoteInput", "mobileWordCount");
 
+  // 5. Feedback / Explanation Section
   const fb = document.getElementById("feedback");
-  if (q.sel) {
+  
+  // LOGIC: Show feedback ONLY if an option is selected AND the question is NOT flagged.
+  if (q.sel && !q.flag) {
     document.getElementById("feedbackStatus").innerHTML = `<strong class="${q.sel===q.answer?'text-success':'text-danger'}">${q.sel === q.answer ? "✅ Correct" : "❌ Incorrect"}</strong>`;
+    
     if (q.explanation && (q.explanation.length > 300 || q.explanation.includes("||TIPS||"))) {
         document.getElementById("feedbackBody").innerHTML = "<p><i>See detailed analysis below...</i></p>";
          document.getElementById("feedbackLink").innerHTML = `<span class="exp-link" onclick="openExplanationInTab(questions[qIndex].explanation, ${qIndex+1})">📖 Open Full Explanation</span>`;
@@ -480,9 +529,16 @@ function loadQuestion() {
         document.getElementById("feedbackLink").innerHTML = "";
     }
     fb.classList.remove("hidden");
-  } else fb.classList.add("hidden");
+  } else {
+    // Hide feedback if unattempted OR if user is in Flag/Doubt Mode
+    fb.classList.add("hidden");
+  }
 
-  updateSidebar(); updateNav(); startQuestionTimer(); trackQuestionTime();
+  // 6. Final UI Updates
+  updateSidebar(); 
+  updateNav(); 
+  startQuestionTimer(); 
+  trackQuestionTime();
 }
 
 function openExplanationInTab(fullExplanation, qNum) {
@@ -551,15 +607,62 @@ function saveCurrentNote(val) {
     document.getElementById("mobileWordCount").innerText = `${currentCount}/100`;
 }
 
-function selectOption(o) { if(questions[qIndex].sel) return; questions[qIndex].sel = o; questions[qIndex].flag = false; loadQuestion(); }
+function selectOption(o) { 
+    if(questions[qIndex].sel) return; 
+    questions[qIndex].sel = o; 
+    // REMOVED: questions[qIndex].flag = false; 
+    loadQuestion(); 
+}
 function toggleGuessState() { questions[qIndex].guess = document.getElementById("guessCheck").checked; }
-function toggleFlag() { questions[qIndex].flag = !questions[qIndex].flag; loadQuestion(); }
+function toggleFlag() { 
+    const q = questions[qIndex];
+    
+    if (q.flag) {
+        // UNFLAGGING: If user selected something while flagged, reset it entirely.
+        if (q.sel) {
+            q.sel = null;   
+            q.guess = false; 
+        }
+        q.flag = false;
+    } else {
+        // FLAGGING: Turn mode on
+        q.flag = true;
+    }
+    loadQuestion(); 
+}
 function next() { if(qIndex < questions.length - 1) { qIndex++; loadQuestion(); } }
 function prev() { if(qIndex > 0) { qIndex--; loadQuestion(); } }
 
 function startTotalTimer() { clearInterval(totalTimer); totalTimer = setInterval(() => { totalSeconds++; document.getElementById("totalTimer").innerText = `${Math.floor(totalSeconds/60)}:${(totalSeconds%60).toString().padStart(2,'0')}`; }, 1000); }
-function startQuestionTimer() { clearInterval(qTimer); qSecondsLeft = activeSession.settings.time; resumeQuestionTimer(); }
-function resumeQuestionTimer() { clearInterval(qTimer); qTimer = setInterval(() => { qSecondsLeft--; document.getElementById("questionTimer").innerText = qSecondsLeft + "s"; if(qSecondsLeft<=0) clearInterval(qTimer); }, 1000); }
+function startQuestionTimer() { 
+    clearInterval(qTimer); 
+    
+    // Check if currently on the last question
+    const isLastQuestion = qIndex === questions.length - 1;
+    
+    // Apply 5x multiplier if last, otherwise use normal setting
+    qSecondsLeft = isLastQuestion ? (activeSession.settings.time * 5) : activeSession.settings.time; 
+    
+    resumeQuestionTimer(); 
+}
+function resumeQuestionTimer() { 
+    clearInterval(qTimer); 
+    qTimer = setInterval(() => { 
+        qSecondsLeft--; 
+        document.getElementById("questionTimer").innerText = qSecondsLeft + "s"; 
+        
+        if(qSecondsLeft <= 1) {
+            clearInterval(qTimer);
+            if (qIndex === questions.length - 1) {
+                // If last question, force auto-submit
+                finishQuiz(true); 
+            } else {
+                // Otherwise, move to next question
+                next(); 
+            }
+        }
+    }, 1000); 
+}
 function trackQuestionTime() { clearInterval(questionDurationTimer); questionDurationTimer = setInterval(() => { if(questions[qIndex]) questions[qIndex].timeSpent = (questions[qIndex].timeSpent || 0) + 1; }, 1000); }
 
 function updateNav() { 
@@ -592,54 +695,101 @@ function toggleSection(id, btn) {
     btn.innerText = el.classList.contains("hidden") ? "+" : "_";
 }
 
-function finishQuiz() {
-  if (!confirm("Submit answers?")) return;
-  pauseAllTimers(); clearInterval(autoSaveInterval);
+function finishQuiz(force = false) {
+  if (!force && !confirm("Submit answers?")) return;
   
-  let c=0, w=0, u=0, g=0; 
+  pauseAllTimers(); 
+  clearInterval(autoSaveInterval);
+  
+  // 1. Force "Guess" status for Flagged Attempts (Any Reason)
+  questions.forEach(q => {
+      if (q.sel && q.flag) {
+          q.guess = true; 
+      }
+  });
+
+  let c=0, w=0, u=0; 
+  // NEW: Initialize Guess Counters
+  let correctG = 0, totalG = 0;
+  
   let sectionStats = {};
 
   questions.forEach(q => { 
       const sec = q.section || "General";
-      if(!sectionStats[sec]) sectionStats[sec] = { c:0, w:0, u:0, total:0, time:0 };
+      // Initialize Section Stats (Now includes correctG and totalG)
+      if(!sectionStats[sec]) sectionStats[sec] = { c:0, w:0, u:0, total:0, time:0, correctG:0, totalG:0 };
+      
       sectionStats[sec].total++;
       sectionStats[sec].time += (q.timeSpent || 0);
 
+      // NEW: Track Guess Metrics
+      if (q.sel && q.guess) {
+          totalG++;
+          sectionStats[sec].totalG++;
+          if (q.sel === q.answer) {
+              correctG++;
+              sectionStats[sec].correctG++;
+          }
+      }
+
+      // Standard Stats
       if(!q.sel) { u++; sectionStats[sec].u++; } 
-      else if(q.sel === q.answer) { c++; sectionStats[sec].c++; if(q.guess) g++; } 
+      else if(q.sel === q.answer) { c++; sectionStats[sec].c++; } 
       else { w++; sectionStats[sec].w++; }
   });
   
   const s = activeSession.settings;
   const rawScore = (c * s.mark) - (w * s.neg);
-  activeSession.report = { c, w, u, g, score: Number(rawScore.toFixed(2)), total: questions.length, sections: sectionStats };
+  
+  // Save expanded report
+  activeSession.report = { 
+      c, w, u, 
+      correctG, totalG, // New Data
+      score: Number(rawScore.toFixed(2)), 
+      total: questions.length, 
+      sections: sectionStats 
+  };
   activeSession.status = "completed";
   
   saveToHistory();
-  showReport();
-  generateAnalyticPDF();
-
-  // UNCONDITIONALLY download completed JSON
-  downloadSyncFile("completed");
+  showReport(); 
+  
+  try {
+      generateAnalyticPDF();
+      downloadSyncFile("completed");
+  } catch (e) {
+      console.warn("Auto-download blocked. Please download manually.");
+  }
 }
 
 // UPDATED: downloadSyncFile now takes an argument for suffix
 function downloadSyncFile(fileType = "sync") {
+    // 1. Get unique sections from current session for accuracy
+    // (This ensures even if you uploaded "Polity_CH1.json", if the internal keys say "Polity", we use that)
+    const uniqueSections = [...new Set(activeSession.questions.map(q => q.section))];
+    const smartName = generateSmartFilename(uniqueSections);
+
+    // 2. Generate Timestamp: DD-MM-YYYY_HH-MM
+    const now = new Date();
+    const datePart = String(now.getDate()).padStart(2, '0') + "-" + 
+                     String(now.getMonth() + 1).padStart(2, '0') + "-" + 
+                     now.getFullYear();
+    const timePart = String(now.getHours()).padStart(2, '0') + "-" + 
+                     String(now.getMinutes()).padStart(2, '0');
+    
+    const timestamp = `${datePart}_${timePart}`;
+
+    // 3. Construct Final Name
+    const finalName = `${smartName}_${fileType}_${timestamp}.json`;
+
+    // 4. Download Process
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(activeSession));
     const dlNode = document.createElement('a');
-    
-    const now = new Date();
-    // DATE FORMAT: DD-MM-YYYY
-    const timestamp = String(now.getDate()).padStart(2, '0') + "-" + String(now.getMonth() + 1).padStart(2, '0') + "-" + now.getFullYear() + "_" + String(now.getHours()).padStart(2, '0') + "-" + String(now.getMinutes()).padStart(2, '0');
-    
-    let baseName = activeSession.originalFileName || activeSession.title || "quiz";
-    if (baseName.length > 200) {
-        baseName = baseName.substring(0, 200) + "...";
-    }
-
     dlNode.setAttribute("href", dataStr);
-    dlNode.setAttribute("download", `${baseName}_${timestamp}_${fileType}.json`);
+    dlNode.setAttribute("download", finalName);
+    document.body.appendChild(dlNode);
     dlNode.click();
+    dlNode.remove();
 }
 
 function showReport() {
@@ -707,9 +857,13 @@ async function generateAnalyticPDF() {
   const accuracyVal = attempted > 0 ? (r.c / attempted) * 100 : 0;
   const maxScoreVal = r.total * s.mark;
   const percentageVal = maxScoreVal > 0 ? (r.score / maxScoreVal) * 100 : 0;
-  const avgTimeVal = r.total > 0 ? totalSeconds / r.total : 0;
+  const avgTimeVal = r.total > 0 ? activeSession.totalSeconds / r.total : 0; // Fixed var name reference
   const correctScoreVal = r.c * s.mark;
   const wrongScoreVal = r.w * s.neg;
+
+  // NEW: Calculate Overall Guess Accuracy
+  const guessAccVal = r.totalG > 0 ? (r.correctG / r.totalG) * 100 : 0;
+  const guessAccStr = r.totalG > 0 ? `${r.correctG}/${r.totalG} (${guessAccVal.toFixed(1)}%)` : "N/A";
 
   doc.setFillColor(44, 62, 80); 
   doc.rect(0, 0, 210, 40, 'F');
@@ -723,7 +877,15 @@ async function generateAnalyticPDF() {
   doc.text(`Generated on: ${new Date().toLocaleString()}`, 105, 30, { align: "center" });
 
   const overallData = [ 
-      ['Total Questions', r.total], ['Attempted', attempted], ['Accuracy', `${fmt(accuracyVal)}%`], ['Percentage', `${fmt(percentageVal)}%`], ['Avg Time / Question', `${fmt(avgTimeVal)}s`], ['Correct (+'+fmt(s.mark)+')', `${r.c} (+${fmt(correctScoreVal)})`], ['Wrong (-'+fmt(s.neg)+')', `${r.w} (-${fmt(wrongScoreVal)})`], ['FINAL SCORE', `${fmt(r.score)} / ${fmt(maxScoreVal)}`] 
+      ['Total Questions', r.total], 
+      ['Attempted', attempted], 
+      ['Accuracy', `${fmt(accuracyVal)}%`], 
+      ['Guess Accuracy', guessAccStr], // <--- NEW ROW
+      ['Percentage', `${fmt(percentageVal)}%`], 
+      ['Avg Time / Question', `${fmt(avgTimeVal)}s`], 
+      ['Correct (+'+fmt(s.mark)+')', `${r.c} (+${fmt(correctScoreVal)})`], 
+      ['Wrong (-'+fmt(s.neg)+')', `${r.w} (-${fmt(wrongScoreVal)})`], 
+      ['FINAL SCORE', `${fmt(r.score)} / ${fmt(maxScoreVal)}`] 
   ];
   
   doc.autoTable({ 
@@ -735,6 +897,7 @@ async function generateAnalyticPDF() {
       styles: { fontSize: 10, cellPadding: 3, lineColor: [0,0,0], lineWidth: 0.1 }
   });
 
+  // Update Section Rows to include Guess Accuracy
   const sectionRows = Object.keys(r.sections).map(k => {
       const sec = r.sections[k];
       const sAtt = sec.c + sec.w;
@@ -742,13 +905,19 @@ async function generateAnalyticPDF() {
       const sScore = (sec.c * s.mark) - (sec.w * s.neg);
       const sPerc = (sec.total * s.mark) > 0 ? (sScore / (sec.total * s.mark)) * 100 : 0;
       const sAvg = sec.total > 0 ? sec.time / sec.total : 0;
-      return [k, sec.total, sAtt, `${fmt(sAcc)}%`, `${fmt(sPerc)}%`, `${fmt(sAvg)}s`, sec.c, sec.w, fmt(sScore)];
+      
+      // NEW: Sectional Guess Calc
+      const secGuessAcc = sec.totalG > 0 ? ((sec.correctG / sec.totalG) * 100).toFixed(0) + '%' : '-';
+
+      // Added secGuessAcc to the row array below
+      return [k, sec.total, sAtt, `${fmt(sAcc)}%`, secGuessAcc, `${fmt(sPerc)}%`, `${fmt(sAvg)}s`, sec.c, sec.w, fmt(sScore)];
   });
 
   doc.text("Section-Wise Analysis", 14, doc.lastAutoTable.finalY + 15);
   doc.autoTable({ 
       startY: doc.lastAutoTable.finalY + 20, 
-      head: [['Section', 'Tot', 'Att', 'Acc', '%', 'Time', 'Cor', 'Wro', 'Score']], 
+      // Added 'G.Acc' to header
+      head: [['Section', 'Tot', 'Att', 'Acc', 'G.Acc', '% Marks', 'Time', 'Cor', 'Wro', 'Score']], 
       body: sectionRows, 
       theme: 'grid', 
       headStyles: { fillColor: [41, 128, 185], textColor: 255 }, 
@@ -756,47 +925,35 @@ async function generateAnalyticPDF() {
   });
 
   doc.addPage();
+  // ... (Rest of the function remains the same: Detailed Question Review & Notes) ...
   doc.setFillColor(44, 62, 80); doc.rect(0, 0, 210, 20, 'F');
   doc.setTextColor(255); doc.setFontSize(14); doc.text("Detailed Question Review", 14, 13);
-
+  
+  // ... (Existing QRows logic) ...
   const qRows = questions.map((q, i) => {
       let status = "UNATTEMPTED";
       if (q.sel) status = (q.sel === q.answer) ? "PASS" : "FAIL";
-      
-      return [ 
-          `Q${i+1}`, 
-          q.q, 
-          q.sel || '-', 
-          q.answer, 
-          status, 
-          q.timeSpent + "s"
-      ];
-  });
-  
-  doc.autoTable({ 
-      startY: 30, 
-      head: [['#', 'Question Text', 'Your Ans', 'Correct', 'Status', 'Time']], 
-      body: qRows, 
-      theme: 'grid',
-      headStyles: { fillColor: [44, 62, 80], textColor: 255, fontStyle: 'bold', halign: 'center' }, 
-      columnStyles: { 
-          0: { cellWidth: 15, halign: 'center', fontStyle: 'bold' }, 
-          1: { cellWidth: 95 }, 
-          2: { cellWidth: 20, halign: 'center' }, 
-          3: { cellWidth: 20, halign: 'center' }, 
-          4: { cellWidth: 20, halign: 'center', fontStyle: 'bold' }, 
-          5: { cellWidth: 15, halign: 'center' }  
-      }, 
-      styles: { fontSize: 9, valign: 'middle', overflow: 'linebreak', cellPadding: 3, lineColor: [0,0,0], lineWidth: 0.1 }, 
-      didParseCell: function(data) { 
-          if (data.section === 'body' && data.column.index === 4) { 
-              if (data.cell.raw === 'PASS') data.cell.styles.textColor = [39, 174, 96]; 
-              else if (data.cell.raw === 'FAIL') data.cell.styles.textColor = [192, 57, 43]; 
-              else data.cell.styles.textColor = [127, 140, 141]; 
-          } 
-      } 
+      return [`Q${i+1}`, q.q, q.sel || '-', q.answer, status, q.timeSpent + "s"];
   });
 
+  doc.autoTable({
+      startY: 30,
+      head: [['#', 'Question Text', 'Your Ans', 'Correct', 'Status', 'Time']],
+      body: qRows,
+      theme: 'grid',
+      headStyles: { fillColor: [44, 62, 80], textColor: 255, fontStyle: 'bold', halign: 'center' },
+      columnStyles: { 0: { cellWidth: 15 }, 1: { cellWidth: 95 }, 2: { cellWidth: 20 }, 3: { cellWidth: 20 }, 4: { cellWidth: 20 }, 5: { cellWidth: 15 } },
+      styles: { fontSize: 9, valign: 'middle', overflow: 'linebreak', cellPadding: 3, lineColor: [0,0,0], lineWidth: 0.1 },
+      didParseCell: function(data) {
+          if (data.section === 'body' && data.column.index === 4) {
+              if (data.cell.raw === 'PASS') data.cell.styles.textColor = [39, 174, 96];
+              else if (data.cell.raw === 'FAIL') data.cell.styles.textColor = [192, 57, 43];
+              else data.cell.styles.textColor = [127, 140, 141];
+          }
+      }
+  });
+  
+  // ... (Notes section and save/download logic) ...
   const notesQ = questions.filter(q => q.notes && q.notes.trim() !== "");
   if (notesQ.length > 0) {
       doc.addPage(); 
@@ -813,15 +970,24 @@ async function generateAnalyticPDF() {
       });
   }
 
+  // 1. Generate Timestamp: DD-MM-YYYY_HH-MM
   const now = new Date();
-  const timestamp = String(now.getDate()).padStart(2, '0') + "-" + String(now.getMonth() + 1).padStart(2, '0') + "-" + now.getFullYear() + "_" + String(now.getHours()).padStart(2, '0') + "-" + String(now.getMinutes()).padStart(2, '0');
+  const datePart = String(now.getDate()).padStart(2, '0') + "-" + 
+                   String(now.getMonth() + 1).padStart(2, '0') + "-" + 
+                   now.getFullYear();
+  const timePart = String(now.getHours()).padStart(2, '0') + "-" + 
+                   String(now.getMinutes()).padStart(2, '0');
   
-  let baseName = activeSession.originalFileName || activeSession.title || "quiz";
-  if (baseName.length > 200) {
-      baseName = baseName.substring(0, 200) + "..."; 
-  }
+  const timestamp = `${datePart}_${timePart}`;
 
-  doc.save(`${baseName}_${timestamp}_Report.pdf`);
+  // 2. Generate Smart Name from Unique Sections
+  // This ensures the filename matches the content (e.g. P1_G14)
+  const uniqueSections = [...new Set(questions.map(q => q.section))];
+  const smartName = generateSmartFilename(uniqueSections);
+
+  // 3. Save with new nomenclature
+  // Format: [SmartName]_Report_[Timestamp].pdf
+  doc.save(`${smartName}_Report_${timestamp}.pdf`);
 }
 
 function autoSave() { activeSession.qIndex = qIndex; activeSession.totalSeconds = totalSeconds; saveToHistory(); }

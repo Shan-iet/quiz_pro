@@ -22,7 +22,7 @@
         <div class="action-card">
           <h3>🆕 Start New</h3>
           <label for="fileInput" class="custom-file-upload"><span id="fileNameDisplay">📁 Select Quiz JSONs</span></label>
-          <input type="file" id="fileInput" accept=".json" multiple onchange="updateFileName(this, 'fileNameDisplay')">
+          <input type="file" id="fileInput" accept=".json,application/json,text/plain,*/*" multiple onchange="updateFileName(this, 'fileNameDisplay')">
           
           <div class="settings-group">
              <div class="input-row">
@@ -37,8 +37,8 @@
 
         <div class="action-card">
           <h3>📂 Resume</h3>
-          <label for="importInput" class="custom-file-upload"><span id="syncNameDisplay">📥 Import Sync File</span></label>
-          <input type="file" id="importInput" accept=".json" onchange="initiateSyncImport()">
+          <label for="importInput" class="custom-file-upload"><span id="syncNameDisplay">📥 Import Sync (JSON) File</span></label>
+          <input type="file" id="importInput" accept=".json,application/json,text/plain,*/*" onchange="initiateSyncImport()">
           
           <div class="radio-group" style="text-align: left; margin: 15px 0;">
             <label class="radio-card"><input type="radio" name="resumeMode" value="fresh" checked><div><span class="radio-title">Fresh Only</span><span class="radio-sub">Unattempted questions</span></div></label>
@@ -148,6 +148,10 @@
   </aside>
 
 </div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+
 <script src="script.js"></script>
+
 </body>
 </html>

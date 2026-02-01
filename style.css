@@ -229,7 +229,11 @@ input[type="file"] { display: none; }
   box-shadow: 0 4px 6px rgba(0,0,0,0.1); height: 100%; display: flex; align-items: center; 
 }
 .option-btn:hover:not(:disabled) { background: rgba(99, 102, 241, 0.1); border-color: var(--primary); transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.2); }
-.option-btn.selected { border-color: var(--primary); background: rgba(99, 102, 241, 0.15); }
+.option-btn.selected { 
+    border-color: #3b82f6 !important; 
+    background: rgba(59, 130, 246, 0.3) !important; 
+    color: white !important;
+}
 .option-btn.correct { background: var(--success) !important; color: #022c22; border-color: var(--success); font-weight: 700; }
 .option-btn.wrong { background: var(--danger) !important; color: white; border-color: var(--danger); opacity: 0.95; }
 .option-btn:disabled { cursor: default; opacity: 0.9; }
