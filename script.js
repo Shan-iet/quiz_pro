@@ -86,8 +86,8 @@ function startNewSession() {
 
   const limitInput = document.getElementById("limitInput").value;
   const shouldShuffle = document.getElementById("shuffleToggle").checked;
-  const userMark = parseFloat(document.getElementById("markInput").value) || 1.66;
-  const userNeg = parseFloat(document.getElementById("negInput").value) || 0.55;
+  const userMark = parseFloat(document.getElementById("markInput").value) || 1.33;
+  const userNeg = parseFloat(document.getElementById("negInput").value) || 0.45;
 
   let allQuestions = [];
   
