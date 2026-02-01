@@ -446,17 +446,17 @@ function finishQuiz() {
   showReport();
   generateAnalyticPDF();
 
-  if (activeSession.unusedQuestions && activeSession.unusedQuestions.length > 0) {
-      exitSession(true);
-  }
+  // UNCONDITIONALLY download completed JSON
+  downloadSyncFile("completed");
 }
 
-function downloadSyncFile() {
+// UPDATED: downloadSyncFile now takes an argument for suffix
+function downloadSyncFile(fileType = "sync") {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(activeSession));
     const dlNode = document.createElement('a');
     
-    // UPDATED TIMESTAMP FORMAT: DD-MM-YYYY
     const now = new Date();
+    // DATE FORMAT: DD-MM-YYYY
     const timestamp = String(now.getDate()).padStart(2, '0') + "-" + String(now.getMonth() + 1).padStart(2, '0') + "-" + now.getFullYear() + "_" + String(now.getHours()).padStart(2, '0') + "-" + String(now.getMinutes()).padStart(2, '0');
     
     let baseName = activeSession.originalFileName || activeSession.title || "quiz";
@@ -465,7 +465,7 @@ function downloadSyncFile() {
     }
 
     dlNode.setAttribute("href", dataStr);
-    dlNode.setAttribute("download", `${baseName}_${timestamp}_sync.json`);
+    dlNode.setAttribute("download", `${baseName}_${timestamp}_${fileType}.json`);
     dlNode.click();
 }
 
@@ -640,7 +640,6 @@ async function generateAnalyticPDF() {
       });
   }
 
-  // UPDATED TIMESTAMP FORMAT: DD-MM-YYYY
   const now = new Date();
   const timestamp = String(now.getDate()).padStart(2, '0') + "-" + String(now.getMonth() + 1).padStart(2, '0') + "-" + now.getFullYear() + "_" + String(now.getHours()).padStart(2, '0') + "-" + String(now.getMinutes()).padStart(2, '0');
   
@@ -671,6 +670,6 @@ function clearAllHistory() { recentHistory = []; localStorage.removeItem("QUIZ_H
 function exitSession(autoDownload = false) { 
     if(!autoDownload && !confirm("Save progress and exit?")) return;
     autoSave();
-    downloadSyncFile();
+    downloadSyncFile(); // Defaults to "sync" type
     if(!autoDownload) location.reload(); 
 }
