@@ -263,38 +263,82 @@ function formatQuestionText(text) {
 function smartHighlight(text) {
     if (!text) return "";
     let processed = text;
+
+    // 1. HEADING LOGIC (The "Case 1-4" Fix)
+    // Captures text ending in ':' while preserving preceding punctuation or start-of-line
+    processed = processed.replace(/(^|[\.\?!]\s+|>\s*)([A-Z][^.:\n<]*?\s*:)(?=\s|<|$)/g, '$1<br><strong class="highlight-term">$2</strong><br>');
+
+    // 2. Format Assertion & Reason (Make them Bold)
+    // These are often split into their own paragraphs by processTextSmartly, but this ensures they look bold.
+    processed = processed.replace(/(Assertion\s*\(?[A-Z]?\)?\s*[:.-]|Reason\s*\(?[A-Z]?\)?\s*[:.-])/gi, '<strong class="highlight-term">$1</strong>');
+
+    // 3. Format Bullet Points
+    // Adds a line break before bullets to make them look like a list, even inside a single paragraph chunk.
+    processed = processed.replace(/([^\n>])\s*([•\-\*])\s+/g, '$1<br><span class="highlight-statement">$2</span> ');
+    
+    // 4. Format Roman Numerals (I. II. etc) as list items
+    processed = processed.replace(/(\s|^)((?:I{1,3}|IV|V|VI{0,3}|IX|X)\.)\s+/g, '<br><strong>$2</strong> ');
+
+    // 5. Highlight Acts, Articles, Sections
     processed = processed.replace(/(\b\d{4}\b|Article \d+|Section \d+|Schedule \d+|Amendment|Act \d{4})/gi, '<span class="highlight-term">$1</span>');
+
+    // 6. Highlight "Option X is correct"
     processed = processed.replace(/(Option [a-d] is [a-z ]*correct(?: answer)?|Statement \d+ is [a-z ]*correct(?: answer)?|Pair [IVX\d]+ is [a-z ]*correct(?: answer)?|Pair [IVX\d]+ is [a-z ]*incorrect(?: answer)?)/gi, '<span class="highlight-statement">$1</span>');
+
+    // 7. Highlight definitions (Fallback for Capitalized words followed by colon)
     processed = processed.replace(/\b([A-Z][a-z]+:)/g, '<span class="definition-header">$1</span>');
+
     return processed;
 }
 
 function processTextSmartly(text) {
     if (!text) return "";
     let processed = text;
-    processed = processed.replace(/([a-zA-Z\s\(\)\$\.]+=[a-zA-Z0-9\s\(\)\+\-\$\.]+)(?=\.|\n|<|$)/g, '||LOGIC_SPLIT||<div class="formula-box">$1</div>||LOGIC_SPLIT||');
-    processed = processed.replace(/(?:^|\.\s+|\>\s*)([A-Z][^.:\n<]+:)(?=\\s)/g, '<br><strong class="highlight-term">$1</strong><br>');
-    processed = processed.replace(/(Pair [IVX\d]+ is (?:in)?correct(?: answer)?|Statement \d+ is (?:in)?correct(?: answer)?|Option [a-d] is (?:in)?correct(?: answer)?)/gi, '||LOGIC_SPLIT||$1');
-    processed = processed.replace(/\b([A-Z][a-z]+:)/g, '||LOGIC_SPLIT||$1');
     
+    // 1. Isolate Formulas (Formulas need their own div)
+    processed = processed.replace(/([a-zA-Z\s\(\)\$\.]+=[a-zA-Z0-9\s\(\)\+\-\$\.]+)(?=\.|\n|<|$)/g, '||LOGIC_SPLIT||<div class="formula-box">$1</div>||LOGIC_SPLIT||');
+
+    // 2. Isolate Options/Statements (These must start new paragraphs)
+    processed = processed.replace(/(Pair [IVX\d]+ is (?:in)?correct(?: answer)?|Statement \d+ is (?:in)?correct(?: answer)?|Option [a-d] is (?:in)?correct(?: answer)?)/gi, '||LOGIC_SPLIT||$1');
+
+    // 3. Isolate Assertion & Reason (Explicit splits)
+    processed = processed.replace(/(Assertion\s*\(?[A-Z]?\)?\s*[:.-]|Reason\s*\(?[A-Z]?\)?\s*[:.-])/gi, '||LOGIC_SPLIT||$1');
+
+    // 4. Split and Process Chunks
     return processed.split('||LOGIC_SPLIT||').map(s => s.trim()).filter(s => s).map(p => {
+        // A. If it's a Formula, return as-is
         if(p.startsWith('<div')) return p;
-        if(p.startsWith('<br>')) return p + smartHighlight(p.replace(/^<br>/, ''));
+
+        // B. CHECK LENGTH: If paragraph is huge (>350 chars), break it into sub-paragraphs
         if (p.length > 350) {
+            // Split into sentences (dots, question marks, exclamations)
+            // Regex explanation: Match anything that isn't a dot, followed by a dot, optionally followed by quote.
             let sentences = p.match(/[^.!?]+[.!?]+["']?|[^.!?]+$/g);
+            
             if(sentences) {
-                let chunks = [], currentChunk = "";
+                let chunks = [];
+                let currentChunk = "";
+                
                 sentences.forEach(sent => {
-                    currentChunk += sent;
-                    if(currentChunk.length > 300) {
+                    // Check if adding this sentence makes the chunk too big
+                    if ((currentChunk.length + sent.length) > 350 && currentChunk.length > 50) {
                         chunks.push(`<p>${smartHighlight(currentChunk)}</p>`);
-                        currentChunk = "";
+                        currentChunk = sent; // Start new chunk
+                    } else {
+                        currentChunk += sent; // Append to current
                     }
                 });
-                if(currentChunk) chunks.push(`<p>${smartHighlight(currentChunk)}</p>`);
+                
+                // Don't forget the last leftover chunk
+                if(currentChunk) {
+                    chunks.push(`<p>${smartHighlight(currentChunk)}</p>`);
+                }
+                
                 return chunks.join("");
             }
         }
+
+        // C. Standard Processing (Short paragraphs)
         return `<p>${smartHighlight(p)}</p>`;
     }).join('');
 }
@@ -365,7 +409,7 @@ function openExplanationInTab(fullExplanation, qNum) {
     const mainExp = parts[0];
     const tips = parts.length > 1 ? parts[1] : null;
 
-    // 1. Construct the COMPLETE HTML string first
+    // 1. Construct the HTML (Restored width: 96% and max-width: 96%)
     const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -376,13 +420,17 @@ function openExplanationInTab(fullExplanation, qNum) {
     *{box-sizing:border-box}
     :root{--bg-color:#f8f9fa;--text-color:#2c3e50;--card-bg:#ffffff;--highlight-term:#d35400;--highlight-stmt-bg:rgba(39,174,96,0.1);--highlight-stmt-text:#27ae60;--tips-bg:#E8F8F5;--tips-border:#1abc9c;--btn-bg:#34495e}
     [data-theme="dark"]{--bg-color:#0f172a;--text-color:#e2e8f0;--card-bg:#1e293b;--highlight-term:#818cf8;--highlight-stmt-bg:rgba(16,185,129,0.2);--highlight-stmt-text:#34d399;--tips-bg:#1e293b;--tips-border:#10b981;--btn-bg:#4f46e5}
-    body{background:var(--bg-color);color:var(--text-color);font-family:'Segoe UI',sans-serif;padding:15px;line-height:1.6;font-size:18px;margin:0;min-height:100vh}
-    .container{width:100%;max-width:800px;margin:0 auto;background:var(--card-bg);padding:20px;border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,0.1)}
+    body{background:var(--bg-color);color:var(--text-color);font-family:'Segoe UI',sans-serif;padding:10px;line-height:1.6;font-size:18px;margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:center}
+    
+    /* RESTORED YOUR PREFERRED WIDTH HERE */
+    .container{width:96%;max-width:96%;margin:0 auto;background:var(--card-bg);padding:20px;border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,0.1)}
+    
     .header-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:15px;border-bottom:1px solid #444}
     h1{margin:0;font-size:1.4rem}
     .theme-toggle{background:transparent;border:1px solid var(--text-color);color:var(--text-color);padding:6px 12px;border-radius:20px;cursor:pointer;font-size:0.9rem}
     .highlight-term{color:var(--highlight-term);font-weight:bold}
     .highlight-statement{color:var(--highlight-stmt-text);background:var(--highlight-stmt-bg);padding:2px 6px;border-radius:4px;font-weight:bold}
+    .definition-header{font-weight:800;color:#128064;text-decoration:underline}
     .tips-box{margin-top:25px;background:var(--tips-bg);border-left:5px solid var(--tips-border);padding:15px;border-radius:4px}
     .close-btn{width:100%;margin-top:30px;padding:14px;background:var(--btn-bg);color:white;border:none;border-radius:8px;cursor:pointer;font-size:16px;font-weight:bold}
     .formula-box{background:rgba(0,0,0,0.2);padding:10px;border-left:4px solid var(--highlight-stmt-text);font-family:monospace;margin:15px 0;white-space:pre-wrap;overflow-x:auto}
@@ -403,19 +451,14 @@ function openExplanationInTab(fullExplanation, qNum) {
 </body>
 </html>`;
 
-    // 2. Create a Blob (Virtual File)
-    // This tricks the browser into thinking it loaded a real file, forcing the viewport logic to work instantly.
+    // 2. Create Blob (Virtual File) to force Viewport recognition
     const blob = new Blob([htmlContent], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
 
-    // 3. Open the Virtual File URL
+    // 3. Open
     const win = window.open(url, '_blank');
-    
-    if (win) {
-        win.focus();
-    } else {
-        alert("Please allow popups to view the explanation.");
-    }
+    if (win) win.focus();
+    else alert("Please allow popups to view the explanation.");
 }
 
 function saveCurrentNote(val) { 
