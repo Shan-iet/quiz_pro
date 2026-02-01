@@ -247,6 +247,84 @@ function loadSession() {
 function formatQuestionText(text) {
     if (!text) return "";
     let formatted = text;
+
+    // 1. MATCH LIST LOGIC
+    if (/match/gi.test(formatted) && /list[- ]?I/gi.test(formatted)) {
+        
+        let headerText = "";
+        let processingText = formatted;
+
+        // A. Isolate Header (Instructions before the colon)
+        const colonIdx = processingText.indexOf(':');
+        if (colonIdx > -1 && colonIdx < processingText.length - 1) {
+             headerText = processingText.substring(0, colonIdx + 1); 
+             processingText = processingText.substring(colonIdx + 1); 
+        }
+
+        // B. Convert HTML breaks to newlines
+        processingText = processingText.replace(/<br>/gi, '\n');
+        
+        // C. Force Newlines before ANY bullet type
+        const bulletRegex = /(\s*-\s*|\s+)(\(?([A-Za-z]+|\d+|[IVXivx]+)[\.\)])/g;
+        processingText = processingText.replace(bulletRegex, '\n$2');
+
+        // D. Group Items
+        let lines = processingText.split('\n');
+        let col1 = [], col2 = [], otherText = [];
+        let list1Type = null;
+
+        const getBulletType = (str) => {
+            str = str.trim();
+            if (/^\(?\d+[\.\)]/.test(str)) return "numeric";
+            if (/^\(?[IVXivx]+[\.\)]/.test(str)) return "roman";
+            if (/^\(?[A-Za-z]+[\.\)]/.test(str)) return "alpha";
+            return null;
+        };
+
+        lines.forEach(line => {
+            let trimmed = line.trim();
+            
+            // --- FIX: Aggressive Per-Line Cleaning ---
+            // Removes start-of-line artifacts: ">", ">, “>, &quot;>
+            trimmed = trimmed.replace(/^["“'”]\s*>/, "")   // Removes "> or “>
+                             .replace(/&quot;\s*>/, "")     // Removes &quot;>
+                             .replace(/^>\s*/, "")          // Removes standalone >
+                             .trim();
+
+            // Skip if line is empty after cleaning
+            if (!trimmed) return;
+
+            let currentType = getBulletType(trimmed);
+
+            if (currentType) {
+                if (!list1Type) list1Type = currentType;
+
+                if (currentType === list1Type) {
+                    col1.push(trimmed.replace(/\s*-\s*$/, '')); 
+                } else {
+                    col2.push(trimmed);
+                }
+            } else {
+                otherText.push(line);
+            }
+        });
+
+        // E. Build Grid
+        if (col1.length > 0 && col2.length > 0) {
+            let matchHtml = '<div class="match-container"><div class="match-column">';
+            col1.forEach(item => matchHtml += `<div>${item}</div>`);
+            matchHtml += '</div><div class="match-column">';
+            col2.forEach(item => matchHtml += `<div>${item}</div>`);
+            matchHtml += '</div></div>';
+            
+            formatted = headerText + 
+                        (headerText ? '<br>' : '') + 
+                        matchHtml + 
+                        (otherText.length ? '<br>' + otherText.join('<br>') : '');
+        }
+    }
+
+    // 2. STANDARD FORMATTING
     formatted = formatted.replace(/(:)\s+/g, '$1<br>');
     formatted = formatted.replace(/(\s)(Which\s+of\s+the\s+(?:following\s+)?statements|Select\s+the\s+correct|Choose\s+the\s+correct|Identify\s+the\s+correct)/gi, '<br><br>$2');
     formatted = formatted.replace(/([^\n>])\s*([“"][^”"]{30,}[”"])/g, '$1<br><span class="q-quote">$2</span>');
@@ -256,8 +334,8 @@ function formatQuestionText(text) {
     formatted = formatted.replace(/([^\n])\s*([•\-\*])\s+/g, '$1<br><span class="q-point">$2&nbsp;</span>');
     formatted = formatted.replace(/(Assertion\s*\(?A\)?\s*[:.-])/gi, '<br><div class="ar-box"><strong>$1</strong>');
     formatted = formatted.replace(/(Reason\s*\(?R\)?\s*[:.-])/gi, '</div><div class="ar-box"><strong>$1</strong>');
-    formatted = formatted.replace(/(<br>){2,}/g, '<br>').replace(/^<br>/, ''); 
-    return formatted;
+    
+    return formatted.replace(/(<br>){2,}/g, '<br>').replace(/^<br>/, ''); 
 }
 
 function smartHighlight(text) {

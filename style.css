@@ -184,7 +184,37 @@ input[type="file"] { display: none; }
 .q-point { display: inline-block; margin-left: 5px; font-weight: 600; color: #e2e8f0; }
 .q-quote { display: block; margin: 15px 0 15px 10px; padding-left: 15px; border-left: 3px solid var(--primary); font-style: italic; color: #cbd5e1; background: rgba(255,255,255,0.03); padding: 10px; border-radius: 0 4px 4px 0; }
 .ar-box { margin: 8px 0; padding: 8px 12px; background: rgba(255,255,255,0.05); border-radius: 6px; border-left: 3px solid #f59e0b; }
+/* --- MATCH LIST CONTAINER --- */
+/* --- MATCH LIST CONTAINER (Strict Side-by-Side) --- */
+.match-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Forces two equal columns */
+    gap: 15px;
+    margin: 15px 0;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    border: 1px dashed var(--border);
+    align-items: start; /* Ensures lists start at the same vertical level */
+}
 
+.match-column {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+}
+
+.match-column div {
+    font-size: 0.9em;
+    line-height: 1.4;
+    word-wrap: break-word;
+}
+
+/* Mobile Tweak: Scale text down slightly, but KEEP side-by-side layout */
+@media (max-width: 400px) {
+    .match-column div { font-size: 0.8em; }
+}
 /* --- OPTIONS MATRIX --- */
 .options { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%; }
 .option-btn:last-child:nth-child(odd) { grid-column: span 2; }
