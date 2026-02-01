@@ -264,19 +264,19 @@ function smartHighlight(text) {
     if (!text) return "";
     let processed = text;
 
-    // 1. HEADING LOGIC (The "Case 1-4" Fix)
-    // Captures text ending in ':' while preserving preceding punctuation or start-of-line
-    processed = processed.replace(/(^|[\.\?!]\s+|>\s*)([A-Z][^.:\n<]*?\s*:)(?=\s|<|$)/g, '$1<br><strong class="highlight-term">$2</strong><br>');
+    // 1. HEADING LOGIC (Refined for Case 1-4 + Leading Spaces)
+    // - (^\s*): Matches start of text, IGNORING any initial spaces (Fixes "Important Tips..." issue)
+    // - ([\.\?!]\s+): Matches after a sentence end
+    // - (>\s*): Matches after an HTML tag like <br>
+    processed = processed.replace(/(^\s*|[\.\?!]\s+|>\s*)([A-Z][^.:\n<]*?\s*:)(?=\s|<|$)/g, '$1<br><strong class="highlight-term">$2</strong><br>');
 
     // 2. Format Assertion & Reason (Make them Bold)
-    // These are often split into their own paragraphs by processTextSmartly, but this ensures they look bold.
     processed = processed.replace(/(Assertion\s*\(?[A-Z]?\)?\s*[:.-]|Reason\s*\(?[A-Z]?\)?\s*[:.-])/gi, '<strong class="highlight-term">$1</strong>');
 
     // 3. Format Bullet Points
-    // Adds a line break before bullets to make them look like a list, even inside a single paragraph chunk.
     processed = processed.replace(/([^\n>])\s*([•\-\*])\s+/g, '$1<br><span class="highlight-statement">$2</span> ');
     
-    // 4. Format Roman Numerals (I. II. etc) as list items
+    // 4. Format Roman Numerals
     processed = processed.replace(/(\s|^)((?:I{1,3}|IV|V|VI{0,3}|IX|X)\.)\s+/g, '<br><strong>$2</strong> ');
 
     // 5. Highlight Acts, Articles, Sections
@@ -285,7 +285,8 @@ function smartHighlight(text) {
     // 6. Highlight "Option X is correct"
     processed = processed.replace(/(Option [a-d] is [a-z ]*correct(?: answer)?|Statement \d+ is [a-z ]*correct(?: answer)?|Pair [IVX\d]+ is [a-z ]*correct(?: answer)?|Pair [IVX\d]+ is [a-z ]*incorrect(?: answer)?)/gi, '<span class="highlight-statement">$1</span>');
 
-    // 7. Highlight definitions (Fallback for Capitalized words followed by colon)
+    // 7. Highlight definitions (Fallback)
+    // IMPORTANT: Keep this as fallback, but rely on Logic #1 for the main "Heading: Value" cases.
     processed = processed.replace(/\b([A-Z][a-z]+:)/g, '<span class="definition-header">$1</span>');
 
     return processed;
@@ -295,50 +296,52 @@ function processTextSmartly(text) {
     if (!text) return "";
     let processed = text;
     
-    // 1. Isolate Formulas (Formulas need their own div)
+    // 1. Isolate Formulas
     processed = processed.replace(/([a-zA-Z\s\(\)\$\.]+=[a-zA-Z0-9\s\(\)\+\-\$\.]+)(?=\.|\n|<|$)/g, '||LOGIC_SPLIT||<div class="formula-box">$1</div>||LOGIC_SPLIT||');
 
-    // 2. Isolate Options/Statements (These must start new paragraphs)
+    // 2. Isolate Options/Statements
     processed = processed.replace(/(Pair [IVX\d]+ is (?:in)?correct(?: answer)?|Statement \d+ is (?:in)?correct(?: answer)?|Option [a-d] is (?:in)?correct(?: answer)?)/gi, '||LOGIC_SPLIT||$1');
 
-    // 3. Isolate Assertion & Reason (Explicit splits)
+    // 3. Isolate Assertion & Reason
     processed = processed.replace(/(Assertion\s*\(?[A-Z]?\)?\s*[:.-]|Reason\s*\(?[A-Z]?\)?\s*[:.-])/gi, '||LOGIC_SPLIT||$1');
 
-    // 4. Split and Process Chunks
     return processed.split('||LOGIC_SPLIT||').map(s => s.trim()).filter(s => s).map(p => {
-        // A. If it's a Formula, return as-is
         if(p.startsWith('<div')) return p;
 
-        // B. CHECK LENGTH: If paragraph is huge (>350 chars), break it into sub-paragraphs
+        // CHECK LENGTH: If paragraph is huge (>350 chars), break it into sub-paragraphs
         if (p.length > 350) {
-            // Split into sentences (dots, question marks, exclamations)
-            // Regex explanation: Match anything that isn't a dot, followed by a dot, optionally followed by quote.
-            let sentences = p.match(/[^.!?]+[.!?]+["']?|[^.!?]+$/g);
+            // ---------------------------------------------------------
+            // FIX: Protect dots inside parentheses so "c." doesn't break the line
+            // We temporarily replace '.' with '{{DOT}}' ONLY inside (...) 
+            // ---------------------------------------------------------
+            let safeP = p.replace(/\([^)]+\)/g, (m) => m.replace(/\./g, "{{DOT}}"));
+
+            // Now safely split into sentences
+            let sentences = safeP.match(/[^.!?]+[.!?]+["']?|[^.!?]+$/g);
             
             if(sentences) {
                 let chunks = [];
                 let currentChunk = "";
                 
                 sentences.forEach(sent => {
-                    // Check if adding this sentence makes the chunk too big
-                    if ((currentChunk.length + sent.length) > 350 && currentChunk.length > 50) {
+                    // RESTORE the dots immediately for the actual text
+                    let realSent = sent.replace(/{{DOT}}/g, ".");
+                    
+                    if ((currentChunk.length + realSent.length) > 350 && currentChunk.length > 50) {
                         chunks.push(`<p>${smartHighlight(currentChunk)}</p>`);
-                        currentChunk = sent; // Start new chunk
+                        currentChunk = realSent;
                     } else {
-                        currentChunk += sent; // Append to current
+                        currentChunk += realSent;
                     }
                 });
                 
-                // Don't forget the last leftover chunk
                 if(currentChunk) {
                     chunks.push(`<p>${smartHighlight(currentChunk)}</p>`);
                 }
-                
                 return chunks.join("");
             }
         }
 
-        // C. Standard Processing (Short paragraphs)
         return `<p>${smartHighlight(p)}</p>`;
     }).join('');
 }
