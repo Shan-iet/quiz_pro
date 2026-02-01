@@ -364,20 +364,54 @@ function openExplanationInTab(fullExplanation, qNum) {
     const parts = fullExplanation.split("||TIPS||");
     const mainExp = parts[0];
     const tips = parts.length > 1 ? parts[1] : null;
-    
-    const win = window.open("", "_blank");
+
+    // 1. Construct the COMPLETE HTML string first
+    const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>Q${qNum} Analysis</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<style>
+    *{box-sizing:border-box}
+    :root{--bg-color:#f8f9fa;--text-color:#2c3e50;--card-bg:#ffffff;--highlight-term:#d35400;--highlight-stmt-bg:rgba(39,174,96,0.1);--highlight-stmt-text:#27ae60;--tips-bg:#E8F8F5;--tips-border:#1abc9c;--btn-bg:#34495e}
+    [data-theme="dark"]{--bg-color:#0f172a;--text-color:#e2e8f0;--card-bg:#1e293b;--highlight-term:#818cf8;--highlight-stmt-bg:rgba(16,185,129,0.2);--highlight-stmt-text:#34d399;--tips-bg:#1e293b;--tips-border:#10b981;--btn-bg:#4f46e5}
+    body{background:var(--bg-color);color:var(--text-color);font-family:'Segoe UI',sans-serif;padding:15px;line-height:1.6;font-size:18px;margin:0;min-height:100vh}
+    .container{width:100%;max-width:800px;margin:0 auto;background:var(--card-bg);padding:20px;border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,0.1)}
+    .header-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:15px;border-bottom:1px solid #444}
+    h1{margin:0;font-size:1.4rem}
+    .theme-toggle{background:transparent;border:1px solid var(--text-color);color:var(--text-color);padding:6px 12px;border-radius:20px;cursor:pointer;font-size:0.9rem}
+    .highlight-term{color:var(--highlight-term);font-weight:bold}
+    .highlight-statement{color:var(--highlight-stmt-text);background:var(--highlight-stmt-bg);padding:2px 6px;border-radius:4px;font-weight:bold}
+    .tips-box{margin-top:25px;background:var(--tips-bg);border-left:5px solid var(--tips-border);padding:15px;border-radius:4px}
+    .close-btn{width:100%;margin-top:30px;padding:14px;background:var(--btn-bg);color:white;border:none;border-radius:8px;cursor:pointer;font-size:16px;font-weight:bold}
+    .formula-box{background:rgba(0,0,0,0.2);padding:10px;border-left:4px solid var(--highlight-stmt-text);font-family:monospace;margin:15px 0;white-space:pre-wrap;overflow-x:auto}
+    p{margin-bottom:1em}
+    img{max-width:100%;height:auto;border-radius:8px}
+</style>
+</head>
+<body data-theme="dark">
+    <div class="container">
+        <div class="header-row">
+            <h1>Q${qNum} Analysis</h1>
+            <button class="theme-toggle" onclick="document.body.setAttribute('data-theme',document.body.getAttribute('data-theme')==='dark'?'light':'dark')">🌗 Theme</button>
+        </div>
+        <div>${processTextSmartly(mainExp)}</div>
+        ${tips ? `<div class="tips-box"><strong>💡 TIPS:</strong> ${processTextSmartly(tips)}</div>` : ''}
+        <button class="close-btn" onclick="window.close()">Close Tab</button>
+    </div>
+</body>
+</html>`;
+
+    // 2. Create a Blob (Virtual File)
+    // This tricks the browser into thinking it loaded a real file, forcing the viewport logic to work instantly.
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+
+    // 3. Open the Virtual File URL
+    const win = window.open(url, '_blank');
     
     if (win) {
-        // 1. Explicitly open the document (Ensures DOCTYPE is respected)
-        win.document.open();
-        
-        // 2. Write the content
-        win.document.write(`<!DOCTYPE html><html lang="en"><head><title>Q${qNum} Analysis</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>*{box-sizing:border-box}:root{--bg-color:#f8f9fa;--text-color:#2c3e50;--card-bg:#ffffff;--highlight-term:#d35400;--highlight-stmt-bg:rgba(39,174,96,0.1);--highlight-stmt-text:#27ae60;--tips-bg:#E8F8F5;--tips-border:#1abc9c;--btn-bg:#34495e}[data-theme="dark"]{--bg-color:#0f172a;--text-color:#e2e8f0;--card-bg:#1e293b;--highlight-term:#818cf8;--highlight-stmt-bg:rgba(16,185,129,0.2);--highlight-stmt-text:#34d399;--tips-bg:#1e293b;--tips-border:#10b981;--btn-bg:#4f46e5}body{background:var(--bg-color);color:var(--text-color);font-family:'Segoe UI',sans-serif;padding:20px 0;line-height:1.8;font-size:18px;display:flex;flex-direction:column;align-items:center;min-height:100vh}.container{width:96%;max-width:96%;min-height:80vh;margin:0 auto;background:var(--card-bg);padding:40px;border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,0.1)}.header-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;border-bottom:2px solid #ccc;padding-bottom:15px;margin-bottom:20px}h1{margin:0;font-size:1.5rem}.theme-toggle{background:transparent;border:1px solid var(--text-color);color:var(--text-color);padding:5px 15px;border-radius:20px;cursor:pointer;font-size:0.9rem}.highlight-term{color:var(--highlight-term);font-weight:bold}.highlight-statement{color:var(--highlight-stmt-text);background:var(--highlight-stmt-bg);padding:2px 6px;border-radius:4px;font-weight:bold}.tips-box{margin-top:30px;background:var(--tips-bg);border-left:5px solid:var(--tips-border);padding:20px;border-radius:4px}.close-btn{width:100%;margin-top:30px;padding:12px;background:var(--btn-bg);color:white;border:none;border-radius:8px;cursor:pointer;font-size:18px;font-weight:bold}.formula-box{background:rgba(0,0,0,0.2);padding:12px;border-left:4px solid var(--highlight-stmt-text);font-family:'Consolas','Monaco',monospace;margin:15px 0;white-space:pre-wrap;word-break:break-word;font-size:0.95em;overflow-x:auto}p{margin-bottom:1.2em}@media screen and (max-width:600px){body{padding:10px 0;font-size:16px}.container{padding:15px;border-radius:8px;box-shadow:none}h1{font-size:1.25rem}.formula-box{font-size:0.85em;white-space:nowrap}}</style></head><body data-theme="dark"><div class="container"><div class="header-row"><h1>Question ${qNum} Analysis</h1><button class="theme-toggle" onclick="document.body.setAttribute('data-theme',document.body.getAttribute('data-theme')==='dark'?'light':'dark')">🌗 Theme</button></div><div>${processTextSmartly(mainExp)}</div>${tips ? `<div class="tips-box"><strong>💡 TIPS:</strong> ${processTextSmartly(tips)}</div>` : ''}<button class="close-btn" onclick="window.close()">Close Tab</button></div><script>function smartHighlight(t){t=t.replace(/\\b((?:The\\s|\\d+(?:st|nd|rd|th)?\\s)?[A-Z][\\w\\s\\-]*(?:Act|Amendment|Bill|Rules|Code|Ordinance|Policy)(?:,?\\s\\d{4})?)\\b/g,'<span class=\"highlight-term\">$1</span>');t=t.replace(/\\b([A-Z][\\w\\s\\.]*(?:Committee|Commission|Tribunal|Council|Aayog|Authority|Bench))\\b/g,'<span class=\"highlight-term\">$1</span>');t=t.replace(/\\b(\\d+-member\\s(?:bench|committee|panel|body))\\b/gi,'<span class=\"highlight-term\">$1</span>');return t.replace(/(Option [a-d] is [a-z ]*correct(?: answer)?)/gi,'<span class=\"highlight-statement\">$1</span>');}function processTextSmartly(t){t=t.replace(/([a-zA-Z\\s\\(\\)\\$\\.]+=[a-zA-Z0-9\\s\\(\\)\\+\\-\\$\\.]+)(?=\\.|\\n|<|$)/g,'||LOGIC_SPLIT||<div class=\"formula-box\">$1</div>||LOGIC_SPLIT||');t=t.replace(/(?:^|\\.\\s+|\\>\\s*)([A-Z][^.:\\n<]+:)(?=\\s)/g,'<br><strong class=\"highlight-term\">$1</strong><br>');t=t.replace(/(Option [a-d] is (?:in)?correct(?: answer)?)/gi,'||LOGIC_SPLIT||$1');return t.split('||LOGIC_SPLIT||').map(s=>{if(s.startsWith('<div'))return s;if(s.startsWith('<br>'))return s+smartHighlight(s.replace(/^<br>/,''));return '<p>'+smartHighlight(s)+'</p>';}).join('');}<\/script></body></html>`);
-        
-        // 3. CRITICAL: Tell browser we are done writing so it renders the viewport
-        win.document.close();
-        
-        // 4. Force focus (helps trigger layout calculation on mobile)
         win.focus();
     } else {
         alert("Please allow popups to view the explanation.");
