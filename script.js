@@ -129,23 +129,49 @@ function startNewSession() {
   const readFile = (file) => {
       return new Promise((resolve) => {
           const r = new FileReader();
-          r.onload = (e) => {
-              try {
-                  const json = JSON.parse(e.target.result);
-                  const fileNameAsSection = file.name.replace(/\.[^/.]+$/, ""); 
-                  let rawList = Array.isArray(json) ? json : (json.sections ? json.sections.flatMap(s => s.questions) : (json.questions || []));
-                  const formatted = rawList.map(q => ({
-                      q: q.q || q.question,
-                      options: q.options,
-                      answer: (q.answer || q.answer_key || "").toUpperCase(),
-                      explanation: q.explanation || "",
-                      section: fileNameAsSection,
-                      source: q.source || q.src || "", 
-                      sel: null, flag: false, guess: false, notes: "", timeSpent: 0
-                  }));
-                  resolve(formatted);
-              } catch (err) { console.error("Error", err); resolve([]); }
-          };
+       r.onload = (e) => {
+            try {
+                const json = JSON.parse(e.target.result);
+                let rawList = [];
+
+                if (Array.isArray(json)) rawList = json;
+                else if (json.questions && Array.isArray(json.questions)) rawList = json.questions;
+                else if (json.data && Array.isArray(json.data)) rawList = json.data;
+                
+                // 1. Capture Root-Level Section
+                const rootSection = json.section || null;
+                const fileNameBase = file.name.replace(/\.[^/.]+$/, ""); 
+
+                const formatted = rawList.map(q => {
+                    let rawSection = q.section || rootSection || fileNameBase;
+
+                    // 2. Robust Normalization Logic
+                    if (rawSection && typeof rawSection === 'string') {
+                        // Step A: Split by separators
+                        // Step B: .filter(Boolean) REMOVES empty strings (Fixes the leading space issue)
+                        const parts = rawSection.split(/[\s_-]+/).filter(Boolean);
+                        
+                        // Step C: Take first 2 real words
+                        const limit = parts.length > 2 ? 2 : parts.length;
+                        rawSection = parts.slice(0, limit).join('_');
+                    }
+
+                    return {
+                        q: q.q || q.question,
+                        options: q.options,
+                        answer: (q.answer || q.answer_key || "").toUpperCase(),
+                        explanation: q.explanation || "",
+                        section: rawSection, 
+                        source: q.source || q.src || "", 
+                        sel: null, flag: false, guess: false, notes: "", timeSpent: 0
+                    };
+                });
+                resolve(formatted);
+            } catch (err) {
+                console.error("Error parsing JSON:", file.name, err);
+                resolve([]);
+            }
+        };
           r.readAsText(file);
       });
   };
