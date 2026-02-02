@@ -82,7 +82,17 @@
       
       <div class="options" id="optionsContainer"></div>
       
-      <div class="footer-tools"><label class="guess-label"><input type="checkbox" id="guessCheck" onchange="toggleGuessState()"><span>🤔 Mark as Guess</span></label></div>
+      <div class="footer-tools">
+        <label class="outdated-label">
+          <input type="checkbox" id="outdatedCheck" onchange="toggleOutdatedState()">
+          <span>🚫 Outdated</span>
+        </label>
+
+        <label class="guess-label">
+          <input type="checkbox" id="guessCheck" onchange="toggleGuessState()">
+            <span>🤔 Mark as Guess</span>
+        </label>
+      </div>
       
       <div id="feedback" class="hidden feedback-box"><div id="feedbackStatus"></div><div id="feedbackBody"></div><div id="feedbackLink"></div></div>
       

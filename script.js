@@ -151,9 +151,8 @@ function startNewSession() {
                         // Step B: .filter(Boolean) REMOVES empty strings (Fixes the leading space issue)
                         const parts = rawSection.split(/[\s_-]+/).filter(Boolean);
                         
-                        // Step C: Take first 2 real words
-                        const limit = parts.length > 2 ? 2 : parts.length;
-                        rawSection = parts.slice(0, limit).join('_');
+                        // Step C: Join with underscores (No Limit)
+                        rawSection = parts.join('_');
                     }
 
                     return {
@@ -163,9 +162,10 @@ function startNewSession() {
                         explanation: q.explanation || "",
                         section: rawSection, 
                         source: q.source || q.src || "", 
-                        sel: null, flag: false, guess: false, notes: "", timeSpent: 0
+                        sel: null, flag: false, guess: false,outdated: q.outdated || false, notes: "", timeSpent: 0
                     };
-                });
+                })
+                .filter(q => q.outdated !== true);
                 resolve(formatted);
             } catch (err) {
                 console.error("Error parsing JSON:", file.name, err);
@@ -493,7 +493,10 @@ function loadQuestion() {
 
   // 1. Question Text & Header
   document.getElementById("questionCounter").innerText = `Q${qIndex + 1} / ${questions.length}`;
-  document.getElementById("sectionBadge").innerText = q.section || 'General';
+  const sectionName = q.section || 'General';
+const badge = document.getElementById("sectionBadge");
+badge.innerText = sectionName;
+badge.title = sectionName;
   
   // Add Flag Icon to text if flagged
   let qHtml = (q.flag ? "🚩 " : "") + formatQuestionText(q.q);
@@ -529,6 +532,11 @@ function loadQuestion() {
   const guessCheck = document.getElementById("guessCheck");
   guessCheck.checked = q.guess || false;
   guessCheck.disabled = false;
+
+  // 2. Mark as Outdated UI (NEW)
+    const outdatedCheck = document.getElementById("outdatedCheck");
+    outdatedCheck.checked = q.outdated || false;
+    outdatedCheck.disabled = false;
 
   // 4. Notes UI
   const noteVal = q.notes || "";
@@ -640,6 +648,27 @@ function selectOption(o) {
     loadQuestion(); 
 }
 function toggleGuessState() { questions[qIndex].guess = document.getElementById("guessCheck").checked; }
+function toggleOutdatedState() {
+    const cb = document.getElementById("outdatedCheck");
+    
+    // CASE 1: User is trying to Check the box (Mark as Outdated)
+    if (cb.checked) {
+        if (confirm("Mark this question as Outdated?")) {
+            // User clicked "OK" - Commit the change
+            questions[qIndex].outdated = true;
+        } else {
+            // User clicked "Cancel" - Revert the visual change immediately
+            cb.checked = false; 
+            questions[qIndex].outdated = false;
+        }
+    } 
+    // CASE 2: User is Unchecking the box (Removing the tag)
+    else {
+        // No confirmation needed to remove the tag
+        questions[qIndex].outdated = false;
+    }
+}   
+
 function toggleFlag() { 
     const q = questions[qIndex];
     
