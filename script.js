@@ -118,6 +118,10 @@ function startNewSession() {
 
   const limitInput = document.getElementById("limitInput").value;
   const shouldShuffle = document.getElementById("shuffleToggle").checked;
+  
+  // 1. Capture the new toggle state
+  const showOutdatedOnly = document.getElementById("outdatedOnlyToggle").checked;
+
   const userMark = parseFloat(document.getElementById("markInput").value) || 1.33;
   const userNeg = parseFloat(document.getElementById("negInput").value) || 0.45;
 
@@ -138,20 +142,14 @@ function startNewSession() {
                 else if (json.questions && Array.isArray(json.questions)) rawList = json.questions;
                 else if (json.data && Array.isArray(json.data)) rawList = json.data;
                 
-                // 1. Capture Root-Level Section
                 const rootSection = json.section || null;
                 const fileNameBase = file.name.replace(/\.[^/.]+$/, ""); 
 
                 const formatted = rawList.map(q => {
                     let rawSection = q.section || rootSection || fileNameBase;
 
-                    // 2. Robust Normalization Logic
                     if (rawSection && typeof rawSection === 'string') {
-                        // Step A: Split by separators
-                        // Step B: .filter(Boolean) REMOVES empty strings (Fixes the leading space issue)
                         const parts = rawSection.split(/[\s_-]+/).filter(Boolean);
-                        
-                        // Step C: Join with underscores (No Limit)
                         rawSection = parts.join('_');
                     }
 
@@ -162,10 +160,21 @@ function startNewSession() {
                         explanation: q.explanation || "",
                         section: rawSection, 
                         source: q.source || q.src || "", 
-                        sel: null, flag: false, guess: false,outdated: q.outdated || false, notes: "", timeSpent: 0
+                        sel: null, flag: false, guess: false,
+                        outdated: q.outdated || false, // Ensure boolean
+                        isEdited: q.isEdited || false,
+                        notes: "", timeSpent: 0
                     };
                 })
-                .filter(q => q.outdated !== true);
+                // 2. UPDATED FILTER LOGIC
+                .filter(q => {
+                    if (showOutdatedOnly) {
+                        return q.outdated === true; // Show ONLY outdated
+                    } else {
+                        return q.outdated !== true; // Show ONLY fresh (default)
+                    }
+                });
+
                 resolve(formatted);
             } catch (err) {
                 console.error("Error parsing JSON:", file.name, err);
@@ -178,7 +187,13 @@ function startNewSession() {
 
   Promise.all(Array.from(files).map(readFile)).then(results => {
       allQuestions = results.flat();
-      if (allQuestions.length === 0) return alert("No valid questions found.");
+      
+      // Alert specific to the mode
+      if (allQuestions.length === 0) {
+          if (showOutdatedOnly) return alert("No outdated questions found in selected files.");
+          return alert("No valid questions found.");
+      }
+
       if (shouldShuffle) shuffleArray(allQuestions);
       
       let activeQ = [], unusedQ = [];
@@ -193,7 +208,8 @@ function startNewSession() {
 
       activeSession = { 
           status: "in-progress", 
-          title: files.length > 1 ? "Multi-Section Session" : smartName,
+          // 3. Update Title to reflect mode
+          title: (files.length > 1 ? "Multi-Section Session" : smartName) + (showOutdatedOnly ? " [OUTDATED]" : ""),
           originalFileName: smartName, 
           questions: activeQ,
           unusedQuestions: unusedQ,
@@ -237,7 +253,7 @@ function startResumeSession() {
             previousActive = previousActive.map(patchSection);
             previousUnused = previousUnused.map(patchSection);
 
-            const masterPool = [...previousActive, ...previousUnused];
+            const masterPool = [...previousActive, ...previousUnused].filter(q => q.outdated !== true);
             let candidateQ = [];
             let remainingPool = [];
 
@@ -304,33 +320,24 @@ function loadSession() {
 /* --- FORMATTING & TEXT --- */
 function formatQuestionText(text) {
     if (!text) return "";
-    let formatted = text;
-
-    // 1. MATCH LIST LOGIC
-    if (/match/gi.test(formatted) && /list[- ]?I/gi.test(formatted)) {
-        
-        let headerText = "";
-        let processingText = formatted;
-
-        // A. Isolate Header (Instructions before the colon)
+    
+    // ============================================================
+    // 1. MATCH LIST LOGIC (PRESERVED)
+    // ============================================================
+    if (/match/gi.test(text) && /list[- ]?I/gi.test(text)) {
+        let headerText = "", processingText = text;
         const colonIdx = processingText.indexOf(':');
         if (colonIdx > -1 && colonIdx < processingText.length - 1) {
              headerText = processingText.substring(0, colonIdx + 1); 
              processingText = processingText.substring(colonIdx + 1); 
         }
-
-        // B. Convert HTML breaks to newlines
         processingText = processingText.replace(/<br>/gi, '\n');
-        
-        // C. Force Newlines before ANY bullet type
         const bulletRegex = /(\s*-\s*|\s+)(\(?([A-Za-z]+|\d+|[IVXivx]+)[\.\)])/g;
         processingText = processingText.replace(bulletRegex, '\n$2');
 
-        // D. Group Items
         let lines = processingText.split('\n');
         let col1 = [], col2 = [], otherText = [];
         let list1Type = null;
-
         const getBulletType = (str) => {
             str = str.trim();
             if (/^\(?\d+[\.\)]/.test(str)) return "numeric";
@@ -340,60 +347,142 @@ function formatQuestionText(text) {
         };
 
         lines.forEach(line => {
-            let trimmed = line.trim();
-            
-            // --- FIX: Aggressive Per-Line Cleaning ---
-            // Removes start-of-line artifacts: ">", ">, “>, &quot;>
-            trimmed = trimmed.replace(/^["“'”]\s*>/, "")   // Removes "> or “>
-                             .replace(/&quot;\s*>/, "")     // Removes &quot;>
-                             .replace(/^>\s*/, "")          // Removes standalone >
-                             .trim();
-
-            // Skip if line is empty after cleaning
+            let trimmed = line.trim()
+                .replace(/^["“'”]\s*>/, "").replace(/&quot;\s*>/, "").replace(/^>\s*/, "").trim();
             if (!trimmed) return;
-
             let currentType = getBulletType(trimmed);
-
             if (currentType) {
                 if (!list1Type) list1Type = currentType;
-
-                if (currentType === list1Type) {
-                    col1.push(trimmed.replace(/\s*-\s*$/, '')); 
-                } else {
-                    col2.push(trimmed);
-                }
-            } else {
-                otherText.push(line);
-            }
+                if (currentType === list1Type) col1.push(trimmed.replace(/\s*-\s*$/, '')); 
+                else col2.push(trimmed);
+            } else otherText.push(line);
         });
 
-        // E. Build Grid
         if (col1.length > 0 && col2.length > 0) {
             let matchHtml = '<div class="match-container"><div class="match-column">';
             col1.forEach(item => matchHtml += `<div>${item}</div>`);
             matchHtml += '</div><div class="match-column">';
             col2.forEach(item => matchHtml += `<div>${item}</div>`);
             matchHtml += '</div></div>';
-            
-            formatted = headerText + 
-                        (headerText ? '<br>' : '') + 
-                        matchHtml + 
-                        (otherText.length ? '<br>' + otherText.join('<br>') : '');
+            return headerText + (headerText ? '<br>' : '') + matchHtml + (otherText.length ? '<br>' + otherText.join('<br>') : '');
         }
     }
 
-    // 2. STANDARD FORMATTING
-    formatted = formatted.replace(/(:)\s+/g, '$1<br>');
-    formatted = formatted.replace(/(\s)(Which\s+of\s+the\s+(?:following\s+)?statements|Select\s+the\s+correct|Choose\s+the\s+correct|Identify\s+the\s+correct)/gi, '<br><br>$2');
-    formatted = formatted.replace(/([^\n>])\s*([“"][^”"]{30,}[”"])/g, '$1<br><span class="q-quote">$2</span>');
-    formatted = formatted.replace(/(\s|^)((?:I{1,3}|IV|V|VI{0,3}|IX|X)\.)\s+/g, '<br><span class="q-point">$2&nbsp;</span>');
-    formatted = formatted.replace(/(\s|^)(\(?\d+\.)\s+/g, '<br><span class="q-point">$2&nbsp;</span>');
-    formatted = formatted.replace(/(\s|^)(\(?[a-z]\)[\.\)])\s+(?![a-z]\.)/gi, '<br><span class="q-point">$2&nbsp;</span>');
-    formatted = formatted.replace(/([^\n])\s*([•\-\*])\s+/g, '$1<br><span class="q-point">$2&nbsp;</span>');
-    formatted = formatted.replace(/(Assertion\s*\(?A\)?\s*[:.-])/gi, '<br><div class="ar-box"><strong>$1</strong>');
-    formatted = formatted.replace(/(Reason\s*\(?R\)?\s*[:.-])/gi, '</div><div class="ar-box"><strong>$1</strong>');
+    // ============================================================
+    // 2. HELPER: SMART LINE BREAKER (Character-by-Character)
+    // ============================================================
+    // Scans string and inserts <br> after sentences, respecting quotes/brackets.
+    function insertSmartBreaks(str) {
+        let res = "";
+        let inDouble = false;   // "..."
+        let inSingle = false;   // '...' or ‘...’
+        let inParen = 0;        // (...)
+        let inBracket = 0;      // [...]
+        
+        const len = str.length;
+        // Common abbreviations to protect (don't break at "Mr.")
+        const abbrs = ['mr', 'ms', 'dr', 'prof', 'st', 'lt', 'capt', 'col', 'gen', 'vs', 'eg', 'ie', 'etc', 'no'];
+
+        for (let i = 0; i < len; i++) {
+            const char = str[i];
+            res += char; // Always add the current character
+
+            // 1. Update State (Are we inside a protected zone?)
+            if (char === '"' || char === '“' || char === '”') { if(!inSingle) inDouble = !inDouble; }
+            else if (char === "'" || char === '‘' || char === '’') { if(!inDouble) inSingle = !inSingle; }
+            else if (char === '(') { if(!inDouble && !inSingle) inParen++; }
+            else if (char === ')') { if(!inDouble && !inSingle && inParen > 0) inParen--; }
+            else if (char === '[') { if(!inDouble && !inSingle) inBracket++; }
+            else if (char === ']') { if(!inDouble && !inSingle && inBracket > 0) inBracket--; }
+
+            // 2. Check for Sentence End (. ? !)
+            // Only if we are NOT inside any quote/paren/bracket
+            if (!inDouble && !inSingle && inParen === 0 && inBracket === 0) {
+                if (char === '.' || char === '?' || char === '!') {
+                    
+                    // A. Abbreviation Check (Look behind)
+                    let isAbbr = false;
+                    for (let word of abbrs) {
+                        // Check if previous chars match abbreviation (e.g. " Mr" or "No")
+                        // str[i] is '.', so look at str[i-word.length ... i]
+                        if (i >= word.length) {
+                            const sub = str.substring(i - word.length, i).toLowerCase();
+                            // Ensure it's the whole word (preceded by space or start)
+                            const charBefore = str[i - word.length - 1];
+                            if (sub === word && (!charBefore || /\s/.test(charBefore))) {
+                                isAbbr = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (isAbbr) continue; // Don't break for "Mr."
+
+                    // B. Look Ahead (Don't break if next char is not a Space + Capital/Number)
+                    // This prevents breaking decimals "3.14" or "A.B.C" logic
+                    // We only want to break if it looks like a new sentence follows.
+                    // However, user asked specifically for "line break at end of sentences".
+                    // The safest bet is: If followed by Space, insert <br>
+                    if (i + 1 < len && /\s/.test(str[i+1])) {
+                        res += "<br>"; 
+                        // Note: The space loop will add the space after <br>, which is fine (HTML collapses it)
+                    }
+                }
+            }
+        }
+        return res;
+    }
+
+    // ============================================================
+    // 3. BULLET-FIRST PARSER
+    // ============================================================
     
-    return formatted.replace(/(<br>){2,}/g, '<br>').replace(/^<br>/, ''); 
+    // 1. Define Bullet Patterns
+    const bulletRegex = /(?:^|\n|\s+)(\(?\d+\.|\(?I{1,3}\.|IV\.|V\.|VI{0,3}\.|IX\.|X\.|\(?[a-zA-Z]\)|\([A-Z]\))\s+/g;
+    
+    // 2. Scan for all bullets
+    const matches = [];
+    let match;
+    while ((match = bulletRegex.exec(text)) !== null) {
+        matches.push({
+            symbol: match[1],
+            start: match.index, 
+            contentStart: match.index + match[0].length 
+        });
+    }
+
+    // 3. Fallback: No bullets -> Just run Smart Breaker on whole text
+    if (matches.length === 0) {
+        let simple = text.replace(/(:)\s+/g, '$1<br>');
+        simple = insertSmartBreaks(simple);
+        return simple.replace(/(<br>){2,}/g, '<br>').replace(/^<br>/, '');
+    }
+
+    // 4. Construct Output
+    let result = "";
+
+    // A. Intro Text (Before first bullet)
+    let intro = text.substring(0, matches[0].start).trim();
+    if (intro) {
+        intro = intro.replace(/(:)\s+/g, '$1<br>');
+        result += intro;
+    }
+
+    // B. Loop Bullets
+    matches.forEach((m, i) => {
+        // Content goes until the NEXT bullet starts
+        let nextStart = (i < matches.length - 1) ? matches[i+1].start : text.length;
+        
+        // Extract content
+        let rawContent = text.substring(m.contentStart, nextStart).trim();
+        
+        // Apply Smart Line Breaks INSIDE the bullet content
+        let processedContent = insertSmartBreaks(rawContent);
+        
+        // Append
+        result += `<br><span class="q-point">${m.symbol}&nbsp;</span>${processedContent}`;
+    });
+
+    return result.replace(/^(<br>)+/, "");
 }
 
 function smartHighlight(text) {
@@ -555,12 +644,24 @@ badge.title = sectionName;
   if (q.sel && !q.flag) {
     document.getElementById("feedbackStatus").innerHTML = `<strong class="${q.sel===q.answer?'text-success':'text-danger'}">${q.sel === q.answer ? "✅ Correct" : "❌ Incorrect"}</strong>`;
     
-    if (q.explanation && (q.explanation.length > 300 || q.explanation.includes("||TIPS||"))) {
-        document.getElementById("feedbackBody").innerHTML = "<p><i>See detailed analysis below...</i></p>";
+    const fbBody = document.getElementById("feedbackBody");
+
+    // CHECK: Is it a long/complex explanation that hasn't been edited yet?
+    // We add '!q.isEdited' because if a user edited it, we ALWAYS want to show their version, regardless of length.
+    if (q.explanation && (q.explanation.length > 300 || q.explanation.includes("||TIPS||")) && !q.isEdited) {
+         // Show "Open Full" Link
+         fbBody.innerHTML = "<p><i>See detailed analysis below...</i></p>";
          document.getElementById("feedbackLink").innerHTML = `<span class="exp-link" onclick="openExplanationInTab(questions[qIndex].explanation, ${qIndex+1})">📖 Open Full Explanation</span>`;
     } else {
-        document.getElementById("feedbackBody").innerHTML = `<div class="beautified-explanation">${processTextSmartly(q.explanation)}</div>`;
-        document.getElementById("feedbackLink").innerHTML = "";
+        // RENDER: Either raw beautified text OR user's saved HTML
+        if (q.isEdited) {
+            // User edited this before -> Trust the HTML exactly (preserves <s> tags and prevents regex breaking them)
+            fbBody.innerHTML = q.explanation;
+        } else {
+            // Never touched -> Apply Smart Beautifier (Regex)
+            fbBody.innerHTML = `<div class="beautified-explanation">${processTextSmartly(q.explanation)}</div>`;
+        }
+        document.getElementById("feedbackLink").innerHTML = ""; 
     }
     fb.classList.remove("hidden");
   } else {
@@ -580,7 +681,12 @@ function openExplanationInTab(fullExplanation, qNum) {
     const mainExp = parts[0];
     const tips = parts.length > 1 ? parts[1] : null;
 
-    // 1. Construct the HTML (Restored width: 96% and max-width: 96%)
+    const win = window.open("", "_blank");
+    
+    if (!win) {
+        return alert("Please allow popups to view the explanation.");
+    }
+
     const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -588,48 +694,158 @@ function openExplanationInTab(fullExplanation, qNum) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <style>
-    *{box-sizing:border-box}
-    :root{--bg-color:#f8f9fa;--text-color:#2c3e50;--card-bg:#ffffff;--highlight-term:#d35400;--highlight-stmt-bg:rgba(39,174,96,0.1);--highlight-stmt-text:#27ae60;--tips-bg:#E8F8F5;--tips-border:#1abc9c;--btn-bg:#34495e}
-    [data-theme="dark"]{--bg-color:#0f172a;--text-color:#e2e8f0;--card-bg:#1e293b;--highlight-term:#818cf8;--highlight-stmt-bg:rgba(16,185,129,0.2);--highlight-stmt-text:#34d399;--tips-bg:#1e293b;--tips-border:#10b981;--btn-bg:#4f46e5}
-    body{background:var(--bg-color);color:var(--text-color);font-family:'Segoe UI',sans-serif;padding:10px;line-height:1.6;font-size:18px;margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:center}
+    /* GLOBAL RESET */
+    * { box-sizing: border-box; }
     
-    /* RESTORED YOUR PREFERRED WIDTH HERE */
-    .container{width:96%;max-width:96%;margin:0 auto;background:var(--card-bg);padding:20px;border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,0.1)}
+    :root {
+        --bg-color: #f8f9fa; --text-color: #2c3e50; --card-bg: #ffffff;
+        --highlight-term: #d35400; --highlight-stmt-bg: rgba(39,174,96,0.1); --highlight-stmt-text: #27ae60;
+        --tips-bg: #E8F8F5; --tips-border: #1abc9c;
+        --btn-bg: #34495e; --danger: #ef4444;
+    }
     
-    .header-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:15px;border-bottom:1px solid #444}
-    h1{margin:0;font-size:1.4rem}
-    .theme-toggle{background:transparent;border:1px solid var(--text-color);color:var(--text-color);padding:6px 12px;border-radius:20px;cursor:pointer;font-size:0.9rem}
-    .highlight-term{color:var(--highlight-term);font-weight:bold}
-    .highlight-statement{color:var(--highlight-stmt-text);background:var(--highlight-stmt-bg);padding:2px 6px;border-radius:4px;font-weight:bold}
-    .definition-header{font-weight:800;color:#128064;text-decoration:underline}
-    .tips-box{margin-top:25px;background:var(--tips-bg);border-left:5px solid var(--tips-border);padding:15px;border-radius:4px}
-    .close-btn{width:100%;margin-top:30px;padding:14px;background:var(--btn-bg);color:white;border:none;border-radius:8px;cursor:pointer;font-size:16px;font-weight:bold}
-    .formula-box{background:rgba(0,0,0,0.2);padding:10px;border-left:4px solid var(--highlight-stmt-text);font-family:monospace;margin:15px 0;white-space:pre-wrap;overflow-x:auto}
-    p{margin-bottom:1em}
-    img{max-width:100%;height:auto;border-radius:8px}
+    [data-theme="dark"] {
+        --bg-color: #0f172a; --text-color: #e2e8f0; --card-bg: #1e293b;
+        --highlight-term: #818cf8; --highlight-stmt-bg: rgba(16,185,129,0.2); --highlight-stmt-text: #34d399;
+        --tips-bg: #1e293b; --tips-border: #10b981; --btn-bg: #4f46e5;
+    }
+    
+    body { background: var(--bg-color); color: var(--text-color); font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; margin: 0; padding: 20px 0; line-height: 1.6; font-size: 18px; }
+    .container { width: 96%; max-width: none; margin: 0 auto; background: var(--card-bg); padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    .header-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; padding-bottom:15px; border-bottom:1px solid #444; }
+    h1 { margin:0; font-size:1.4rem; }
+    
+    .btn { cursor:pointer; padding:6px 12px; border-radius:6px; border:1px solid #555; background:transparent; color:var(--text-color); font-weight:bold; font-size: 0.9rem; }
+    .btn:hover { background: rgba(255,255,255,0.1); }
+    
+    .btn-save { background: transparent; color: #10b981; border: 1px solid #10b981; }
+    .btn-save:hover { background: rgba(9, 201, 25, 0.25); }
+
+    /* PALETTE STYLES */
+    .btn-tool { background: rgba(255,255,255,0.05); border: 1px solid #555; color: var(--text-color); margin-right: 5px;}
+    .palette-container { display: inline-flex; gap: 4px; background: rgba(0,0,0,0.4); padding: 4px 8px; border-radius: 20px; vertical-align: middle; }
+    .color-dot { width: 16px; height: 16px; border-radius: 50%; cursor: pointer; border: 1px solid rgba(255,255,255,0.3); transition: transform 0.2s; display: inline-block;}
+    .color-dot:hover { transform: scale(1.3); border-color: white; }
+    
+    /* Ensure highlights look good */
+    span[style*="background-color"] { border-radius: 2px; padding: 0 2px; }
+    strike, s, del { text-decoration: line-through; opacity: 0.8; } /* Removed fixed red color */
+
+    .hidden { display: none !important; }
+    #editable-content[contenteditable="true"] { border: 2px dashed #666; padding: 10px; border-radius: 8px; outline: none; }
+    #editable-content[contenteditable="true"]:focus { border-color: #6366f1; }
+
+    .highlight-term { color:var(--highlight-term); font-weight:bold; }
+    .highlight-statement { color:var(--highlight-stmt-text); background:var(--highlight-stmt-bg); padding:2px 6px; border-radius:4px; font-weight:bold; }
+    .tips-box { margin-top:25px; background:var(--tips-bg); border-left:5px solid var(--tips-border); padding:15px; border-radius:4px; }
+    .toolbar-group { display: flex; gap: 8px; align-items: center; }
+
+    @media (max-width: 600px) { body { font-size: 16px; padding: 10px 0; } .container { width: 96%; padding: 15px; } .btn { padding: 4px 8px; font-size: 0.8rem; } }
 </style>
 </head>
 <body data-theme="dark">
     <div class="container">
         <div class="header-row">
             <h1>Q${qNum} Analysis</h1>
-            <button class="theme-toggle" onclick="document.body.setAttribute('data-theme',document.body.getAttribute('data-theme')==='dark'?'light':'dark')">🌗 Theme</button>
+            <div class="toolbar-group">
+                <div id="editTools" class="hidden toolbar-group" style="align-items:center;">
+                    
+                    <div style="display:inline-flex; align-items:center;">
+                        <button class="btn btn-tool" onclick="togglePalette('strikePalette')" title="Strikethrough"><s>A</s> ▼</button>
+                        <div id="strikePalette" class="palette-container hidden">
+                            <span class="color-dot" style="background:#ef4444" onclick="applyColorStrike('#ef4444')"></span>
+                            <span class="color-dot" style="background:#94a3b8" onclick="applyColorStrike('#94a3b8')"></span>
+                            <span class="color-dot" style="background:#3b82f6" onclick="applyColorStrike('#3b82f6')"></span>
+                        </div>
+                    </div>
+
+                    <div style="display:inline-flex; align-items:center;">
+                        <button class="btn btn-tool" onclick="togglePalette('hilitePalette')" title="Highlight">🖊 ▼</button>
+                        <div id="hilitePalette" class="palette-container hidden">
+                            <span class="color-dot" style="background:rgba(255,255,0,0.4)" onclick="applyColorHilite('rgba(255,255,0,0.4)')"></span>
+                            <span class="color-dot" style="background:rgba(74,222,128,0.4)" onclick="applyColorHilite('rgba(74,222,128,0.4)')"></span>
+                            <span class="color-dot" style="background:rgba(96,165,250,0.4)" onclick="applyColorHilite('rgba(96,165,250,0.4)')"></span>
+                            <span class="color-dot" style="background:rgba(244,114,182,0.4)" onclick="applyColorHilite('rgba(244,114,182,0.4)')"></span>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-save" onclick="saveChildChanges()">✅ Save</button>
+                </div>
+                
+                <button id="editToggleBtn" class="btn" onclick="toggleChildEdit()">✏️ Edit</button>
+                <button class="btn" onclick="document.body.setAttribute('data-theme',document.body.getAttribute('data-theme')==='dark'?'light':'dark')">🌗 Theme</button>
+            </div>
         </div>
-        <div>${processTextSmartly(mainExp)}</div>
-        ${tips ? `<div class="tips-box"><strong>💡 TIPS:</strong> ${processTextSmartly(tips)}</div>` : ''}
-        <button class="close-btn" onclick="window.close()">Close Tab</button>
+
+        <div id="editable-content">
+            <div>${processTextSmartly(mainExp)}</div>
+            ${tips ? `<div class="tips-box"><strong>💡 TIPS:</strong> ${processTextSmartly(tips)}</div>` : ''}
+        </div>
+
+        <button class="btn" style="width:100%; margin-top:30px; background:var(--btn-bg); color:white; padding:12px; font-size:1rem;" onclick="window.close()">Close Tab</button>
     </div>
+
+    <script>
+        function toggleChildEdit() {
+            const el = document.getElementById('editable-content');
+            const tools = document.getElementById('editTools');
+            const btn = document.getElementById('editToggleBtn');
+            const isEditing = el.getAttribute('contenteditable') === 'true';
+            
+            if(isEditing) {
+                el.setAttribute('contenteditable', 'false');
+                tools.classList.add('hidden');
+                btn.innerText = "✏️ Edit";
+            } else {
+                el.setAttribute('contenteditable', 'true');
+                tools.classList.remove('hidden');
+                btn.innerText = "✕ Cancel";
+                el.focus();
+            }
+        }
+
+        function togglePalette(id) {
+            const p = document.getElementById(id);
+            const isHidden = p.classList.contains('hidden');
+            // Close others
+            document.querySelectorAll('.palette-container').forEach(el => el.classList.add('hidden'));
+            if (isHidden) p.classList.remove('hidden');
+        }
+
+        function applyColorHilite(color) {
+            if (!document.execCommand('hiliteColor', false, color)) {
+                document.execCommand('backColor', false, color);
+            }
+            document.getElementById('editable-content').focus();
+        }
+
+        function applyColorStrike(color) {
+            document.execCommand('strikeThrough', false, null);
+            document.execCommand('foreColor', false, color);
+            document.getElementById('editable-content').focus();
+        }
+
+        function saveChildChanges() {
+            const fullHTML = document.getElementById('editable-content').innerHTML;
+            if (window.opener && !window.opener.closed) {
+                const success = window.opener.handleChildSave(${qNum}, fullHTML);
+                if(success) {
+                    toggleChildEdit();
+                    alert("✅ Changes saved to main Quiz Session!");
+                } else {
+                    alert("Error: Could not find question in parent window.");
+                }
+            } else {
+                alert("Error: Main Quiz window seems to be closed. Cannot save.");
+            }
+        }
+    <\/script>
 </body>
 </html>`;
 
-    // 2. Create Blob (Virtual File) to force Viewport recognition
-    const blob = new Blob([htmlContent], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-
-    // 3. Open
-    const win = window.open(url, '_blank');
-    if (win) win.focus();
-    else alert("Please allow popups to view the explanation.");
+    win.document.open();
+    win.document.write(htmlContent);
+    win.document.close();
 }
 
 function saveCurrentNote(val) { 
@@ -1067,3 +1283,116 @@ function exitSession(autoDownload = false) {
     downloadSyncFile(); // Defaults to "sync" type
     if(!autoDownload) location.reload(); 
 }
+
+/* --- EXPLANATION EDITING FUNCTIONS --- */
+
+function toggleExplanationEdit() {
+    const body = document.getElementById("feedbackBody");
+    const toolbar = document.getElementById("editorToolbar");
+    const editBtn = document.getElementById("editExpBtn");
+    
+    // Check if currently editing
+    const isEditing = body.getAttribute("contenteditable") === "true";
+
+    if (isEditing) {
+        // CANCEL Action: Turn off edit mode without saving
+        body.setAttribute("contenteditable", "false");
+        toolbar.classList.add("hidden");
+        editBtn.innerText = "✏️";
+        loadQuestion(); // Re-load to discard unsaved visual changes
+    } else {
+        // EDIT Action: Turn on edit mode
+        body.setAttribute("contenteditable", "true");
+        toolbar.classList.remove("hidden");
+        editBtn.innerText = "✕"; // Change icon to Cancel
+        body.focus();
+    }
+}
+
+function applyStrike() {
+    // Native command: Toggles strikethrough on selected text
+    document.execCommand('strikeThrough', false, null);
+    document.getElementById("feedbackBody").focus(); // Keep focus
+}
+
+function applyHighlight() {
+    // Use semi-transparent yellow so white text (Dark Mode) is still readable
+    const highlightColor = "rgba(255, 255, 0, 0.25)";
+    
+    // Try standard 'hiliteColor' first, fallback to 'backColor' if needed
+    if (!document.execCommand('hiliteColor', false, highlightColor)) {
+        document.execCommand('backColor', false, highlightColor); 
+    }
+    
+    document.getElementById("feedbackBody").focus(); // Keep focus for typing
+}
+
+/* --- NEW COLOR PALETTE LOGIC --- */
+function togglePalette(id) {
+    const p = document.getElementById(id);
+    const isHidden = p.classList.contains('hidden');
+    
+    // Close all other palettes first to avoid clutter
+    document.querySelectorAll('.palette-container').forEach(el => el.classList.add('hidden'));
+    
+    if (isHidden) p.classList.remove('hidden');
+    else p.classList.add('hidden');
+}
+
+function applyColorHilite(color) {
+    if (!document.execCommand('hiliteColor', false, color)) {
+        document.execCommand('backColor', false, color);
+    }
+    document.getElementById("feedbackBody").focus();
+}
+
+function applyColorStrike(color) {
+    // 1. Apply the Strikethrough
+    document.execCommand('strikeThrough', false, null);
+    
+    // 2. Apply the Color (ForeColor affects the text and line in most browsers)
+    document.execCommand('foreColor', false, color);
+    
+    document.getElementById("feedbackBody").focus();
+}
+
+function saveExplanationEdit() {
+    const body = document.getElementById("feedbackBody");
+    
+    // 1. Capture HTML (Includes <s> tags and new text)
+    const newHTML = body.innerHTML;
+    
+    // 2. Overwrite Original Data
+    questions[qIndex].explanation = newHTML;
+    questions[qIndex].isEdited = true; // Prevents regex from breaking tags later
+    
+    // 3. Turn off Edit Mode
+    body.setAttribute("contenteditable", "false");
+    document.getElementById("editorToolbar").classList.add("hidden");
+    document.getElementById("editExpBtn").innerText = "✏️";
+    
+    // 4. Visual Confirmation
+    const status = document.getElementById("feedbackStatus");
+    const originalStatus = status.innerHTML;
+    status.innerHTML = "<span style='color:#10b981; font-weight:bold;'>✅ Saved!</span>";
+    setTimeout(() => status.innerHTML = originalStatus, 1500);
+}
+
+/* --- CHILD WINDOW COMMUNICATION --- */
+// This allows the separate tab to send saved data back to the main app
+window.handleChildSave = function(qNum, newHTML) {
+    // qNum is 1-based index (displayed to user), convert to array index
+    const index = qNum - 1;
+    
+    if (questions[index]) {
+        questions[index].explanation = newHTML;
+        questions[index].isEdited = true;
+        
+        // If the main window is currently looking at this question, refresh it
+        if (qIndex === index) {
+            loadQuestion();
+        }
+        return true;
+    }
+    return false;
+};

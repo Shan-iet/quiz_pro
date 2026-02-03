@@ -30,7 +30,10 @@
                 <div class="input-wrap"><label>Penalty (-)</label><input type="number" id="negInput" placeholder="Def" step="0.1"></div>
              </div>
              <div class="input-row"><div class="input-wrap"><label>Max Questions</label><input type="number" id="limitInput" placeholder="All" min="1"></div></div>
-             <div class="checkbox-wrapper center-check"><input type="checkbox" id="shuffleToggle"><label for="shuffleToggle">🔀 Shuffle</label></div>
+             <div style="display: flex; gap: 15px; justify-content: center; margin-top: 10px;">
+            <div class="checkbox-wrapper center-check"><input type="checkbox" id="shuffleToggle"><label for="shuffleToggle">🔀 Shuffle</label></div>
+            <div class="checkbox-wrapper center-check"><input type="checkbox" id="outdatedOnlyToggle"><label for="outdatedOnlyToggle" style="color: #ef4444;">🚫 Outdated Only</label></div>
+            </div>
           </div>
           <button class="btn btn-primary btn-full btn-glow" onclick="startNewSession()">Start Quiz</button>
         </div>
@@ -94,7 +97,41 @@
         </label>
       </div>
       
-      <div id="feedback" class="hidden feedback-box"><div id="feedbackStatus"></div><div id="feedbackBody"></div><div id="feedbackLink"></div></div>
+      <div id="feedback" class="hidden feedback-box">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; gap: 10px;">
+     <div id="feedbackStatus"></div>
+     
+     <div class="feedback-tools">
+        <div id="editorToolbar" class="hidden" style="display:inline-flex; align-items:center; gap:5px; margin-right:5px;">
+    
+    <div style="display:inline-flex; align-items:center;">
+        <button class="btn-xs btn-strike-tool" onclick="togglePalette('strikePalette')" title="Strikethrough Colors"><s>A</s> ▼</button>
+        <div id="strikePalette" class="palette-container hidden">
+            <span class="color-dot" style="background:#ef4444" onclick="applyColorStrike('#ef4444')"></span>
+            <span class="color-dot" style="background:#94a3b8" onclick="applyColorStrike('#94a3b8')"></span>
+            <span class="color-dot" style="background:#3b82f6" onclick="applyColorStrike('#3b82f6')"></span>
+        </div>
+    </div>
+
+    <div style="display:inline-flex; align-items:center;">
+        <button class="btn-xs btn-highlight-tool" onclick="togglePalette('hilitePalette')" title="Highlight Colors">🖊 ▼</button>
+        <div id="hilitePalette" class="palette-container hidden">
+            <span class="color-dot" style="background:rgba(255,255,0,0.4)" onclick="applyColorHilite('rgba(255,255,0,0.4)')"></span>
+            <span class="color-dot" style="background:rgba(74,222,128,0.4)" onclick="applyColorHilite('rgba(74,222,128,0.4)')"></span>
+            <span class="color-dot" style="background:rgba(96,165,250,0.4)" onclick="applyColorHilite('rgba(96,165,250,0.4)')"></span>
+            <span class="color-dot" style="background:rgba(244,114,182,0.4)" onclick="applyColorHilite('rgba(244,114,182,0.4)')"></span>
+        </div>
+    </div>
+
+    <button class="btn-xs btn-save-tool" onclick="saveExplanationEdit()" title="Save Changes">✅</button>
+</div>
+        <button id="editExpBtn" class="btn-xs btn-secondary" onclick="toggleExplanationEdit()">✏️</button>
+     </div>
+  </div>
+  
+  <div id="feedbackBody" class="beautified-explanation"></div>
+  <div id="feedbackLink"></div>
+</div>
       
       <div class="controls">
         <button class="btn btn-nav-secondary" onclick="prev()">← Prev</button>

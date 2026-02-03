@@ -412,3 +412,115 @@ input[type="file"] { display: none; }
     gap: 8px;
   }
 }
+
+/* --- EXPLANATION EDITING --- */
+/* Visual cue when the box is editable */
+.beautified-explanation[contenteditable="true"] {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px dashed var(--text-muted);
+    padding: 10px;
+    border-radius: 4px;
+    outline: none;
+    cursor: text;
+    min-height: 40px;
+}
+
+.beautified-explanation[contenteditable="true"]:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+}
+
+/* Ensure strikethrough is high-contrast and visible */
+strike, s, del {
+    /* REMOVE global color so inline styles can work */
+    /* color: var(--danger); */ 
+    text-decoration: line-through;
+    opacity: 0.8;
+}
+
+/* Optional: If you still want the default "Outdated" tag to be red */
+.outdated-tag s {
+    color: var(--danger);
+}
+
+/* --- NEW TOOLBAR BUTTONS --- */
+.btn-strike-tool {
+    background: rgba(239, 68, 68, 0.1); /* Very faint red background */
+    border: 1px solid rgba(239, 68, 68, 0.5); /* Semi-transparent border */
+    color: #790f0f; /* The text/icon remains red */
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: all 0.2s ease;
+}
+
+.btn-strike-tool:hover {
+    background: rgba(239, 68, 68, 0.25); /* Slightly brighter on hover */
+    border-color: #630d0d;
+}
+
+/* --- SAVE BUTTON (GHOST STYLE) --- */
+.btn-save-tool {
+    background: transparent;           /* Default: Transparent */
+    border: 1px solid var(--success);  /* Green Border */
+    color: var(--success);             /* Green Text/Icon */
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: all 0.2s ease;
+}
+
+.btn-save-tool:hover {
+    background: rgba(16, 185, 129, 0.25); /* Dark Greenish Tint on Hover */
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+}
+
+/* --- HIGHLIGHT TOOL STYLES --- */
+.btn-highlight-tool {
+    background: rgba(234, 179, 8, 0.1); /* Amber tint */
+    border: 1px solid rgba(234, 179, 8, 0.5);
+    color: #ca8a04; /* Darker amber text */
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: all 0.2s ease;
+}
+
+.btn-highlight-tool:hover {
+    background: rgba(234, 179, 8, 0.25);
+    border-color: #a16207;
+}
+
+/* Ensure highlights saved via execCommand look good */
+span[style*="background-color"] {
+    border-radius: 2px;
+    padding: 0 2px; 
+}
+
+/* --- COLOR PALETTE UI --- */
+.palette-container {
+    display: inline-flex;
+    gap: 4px;
+    background: rgba(0,0,0,0.2);
+    padding: 4px 8px;
+    border-radius: 20px;
+    margin: 0 5px;
+    vertical-align: middle;
+}
+
+.color-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.3);
+    transition: transform 0.2s;
+}
+
+.color-dot:hover {
+    transform: scale(1.3);
+    border-color: white;
+}
