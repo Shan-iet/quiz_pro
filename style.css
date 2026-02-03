@@ -18,6 +18,9 @@
   --q-font-size: 20px;
   --exp-font-size: 17px; /* Default ~1.05rem */
   --q-font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+  /* Layout Defaults */
+  --qp-width: 78%; /* Question Panel takes 78% by default */
 }
 
 body { 
@@ -40,10 +43,11 @@ body {
 }
 
 /* Default Quiz Mode: Grid */
+/* UPDATED: Uses dynamic variable and minmax to prevent overflow */
 .app-container.quiz-mode {
   display: grid;
-  grid-template-columns: 1fr 260px; 
-  gap: 25px; 
+  grid-template-columns: var(--qp-width) minmax(0, 1fr); 
+  gap: 10px; 
   max-width: 1280px;
   padding: 0 20px;
 }
@@ -348,9 +352,11 @@ input[type="file"] { display: none; }
     height: fit-content; display: flex; flex-direction: column; gap: 20px; 
     position: sticky; top: 20px; 
     transition: all 0.3s ease;
+    /* Ensure it handles small widths gracefully */
+    min-width: 0;
 }
 .sidebar-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.sidebar-title { font-weight: 700; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); }
+.sidebar-title { font-weight: 700; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); white-space: nowrap; }
 .toggle-btn { background: var(--border); color: white; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border-radius: 4px; border: none; cursor: pointer; font-size: 0.8rem; }
 .sidebar-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 8px; max-height: 110px; overflow-y: auto; padding-right: 4px; }
 .sidebar-list::-webkit-scrollbar { width: 4px; }
@@ -363,7 +369,7 @@ input[type="file"] { display: none; }
 .settings-panel { background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; }
 .setting-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 0.85rem; color: var(--text-muted); }
 .setting-row:last-child { margin-bottom: 0; }
-.setting-row select { background: var(--bg); border: 1px solid var(--border); color: white; padding: 2px 6px; border-radius: 4px; }
+.setting-row select { background: var(--bg); border: 1px solid var(--border); color: white; padding: 2px 6px; border-radius: 4px; max-width: 100px; }
 
 /* --- ANALYTICS TABLE --- */
 .sectional-container { margin: 40px 0; overflow-x: auto; }
@@ -379,12 +385,15 @@ input[type="file"] { display: none; }
 .mobile-notes-view { display: none; margin-top: 20px; }
 
 /* --- MEDIA QUERIES --- */
+/* REVISED: Removed responsive layout stacking. Keeping minor tweaks for font sizes */
 @media (max-width: 900px) {
-  .app-container.quiz-mode { grid-template-columns: 1fr; }
-  .sidebar { position: static; max-height: none; flex-direction: row; flex-wrap: wrap; }
-  .sidebar-section { flex: 1; min-width: 250px; }
+  /* Previously this stacked columns. Now we remove grid-template-columns change */
+  /* .app-container.quiz-mode { grid-template-columns: 1fr; }  <-- DELETED */
+  
+  /* Sidebar tweaks for smaller width but still vertical */
+  .sidebar-section { min-width: 0; }
   .mobile-notes-view { display: block; }
-  .sidebar #noteInput, .sidebar #sidebarWordCount { display: none; }
+  .sidebar #noteInput, .sidebar #sidebarWordCount { display: none; } /* Hide large note input in sidebar on small screens to save space */
   .sidebar-close-btn { display: none; }
   #showSidebarBtn { display: none !important; }
 }
@@ -443,11 +452,11 @@ strike, s, del {
     color: var(--danger);
 }
 
-/* --- NEW TOOLBAR BUTTONS --- */
-.btn-strike-tool {
-    background: rgba(239, 68, 68, 0.1); /* Very faint red background */
-    border: 1px solid rgba(239, 68, 68, 0.5); /* Semi-transparent border */
-    color: #790f0f; /* The text/icon remains red */
+/* --- TOOLBAR BUTTONS --- */
+.btn-tool {
+    background: transparent;           
+    border: 1px solid var(--border);
+    color: var(--text);            
     padding: 4px 8px;
     border-radius: 4px;
     cursor: pointer;
@@ -455,9 +464,9 @@ strike, s, del {
     transition: all 0.2s ease;
 }
 
-.btn-strike-tool:hover {
-    background: rgba(239, 68, 68, 0.25); /* Slightly brighter on hover */
-    border-color: #630d0d;
+.btn-tool:hover {
+    background: rgba(255, 255, 255, 0.05); 
+    border-color: var(--text);
 }
 
 /* --- SAVE BUTTON (GHOST STYLE) --- */
@@ -475,52 +484,4 @@ strike, s, del {
 .btn-save-tool:hover {
     background: rgba(16, 185, 129, 0.25); /* Dark Greenish Tint on Hover */
     box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
-}
-
-/* --- HIGHLIGHT TOOL STYLES --- */
-.btn-highlight-tool {
-    background: rgba(234, 179, 8, 0.1); /* Amber tint */
-    border: 1px solid rgba(234, 179, 8, 0.5);
-    color: #ca8a04; /* Darker amber text */
-    padding: 4px 8px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.75rem;
-    transition: all 0.2s ease;
-}
-
-.btn-highlight-tool:hover {
-    background: rgba(234, 179, 8, 0.25);
-    border-color: #a16207;
-}
-
-/* Ensure highlights saved via execCommand look good */
-span[style*="background-color"] {
-    border-radius: 2px;
-    padding: 0 2px; 
-}
-
-/* --- COLOR PALETTE UI --- */
-.palette-container {
-    display: inline-flex;
-    gap: 4px;
-    background: rgba(0,0,0,0.2);
-    padding: 4px 8px;
-    border-radius: 20px;
-    margin: 0 5px;
-    vertical-align: middle;
-}
-
-.color-dot {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    cursor: pointer;
-    border: 1px solid rgba(255,255,255,0.3);
-    transition: transform 0.2s;
-}
-
-.color-dot:hover {
-    transform: scale(1.3);
-    border-color: white;
 }

@@ -63,6 +63,17 @@ function changeFontFamily(font) {
     document.documentElement.style.setProperty('--q-font-family', font);
 }
 
+// NEW: Dynamically adjust Sidebar Width
+function changeSidebarWidth(val) {
+    // Validate input (prevent breaking layout completely)
+    if (!val || val < 5 || val > 90) return;
+    
+    // Calculate Question Panel Width (100 - Side Width)
+    const qpWidth = 100 - val;
+    
+    document.documentElement.style.setProperty('--qp-width', qpWidth + '%');
+}
+
 /* --- HELPER: SMART FILENAME GENERATOR --- */
 function generateSmartFilename(source) {
     let names = [];
@@ -648,7 +659,7 @@ badge.title = sectionName;
 
     // CHECK: Is it a long/complex explanation that hasn't been edited yet?
     // We add '!q.isEdited' because if a user edited it, we ALWAYS want to show their version, regardless of length.
-    if (q.explanation && (q.explanation.length > 300 || q.explanation.includes("||TIPS||")) && !q.isEdited) {
+    if (q.explanation && (q.explanation.length > 300 || q.explanation.includes("||TIPS||"))) {
          // Show "Open Full" Link
          fbBody.innerHTML = "<p><i>See detailed analysis below...</i></p>";
          document.getElementById("feedbackLink").innerHTML = `<span class="exp-link" onclick="openExplanationInTab(questions[qIndex].explanation, ${qIndex+1})">📖 Open Full Explanation</span>`;
@@ -721,12 +732,20 @@ function openExplanationInTab(fullExplanation, qNum) {
     .btn-save { background: transparent; color: #10b981; border: 1px solid #10b981; }
     .btn-save:hover { background: rgba(9, 201, 25, 0.25); }
 
-    /* PALETTE STYLES */
-    .btn-tool { background: rgba(255,255,255,0.05); border: 1px solid #555; color: var(--text-color); margin-right: 5px;}
-    .palette-container { display: inline-flex; gap: 4px; background: rgba(0,0,0,0.4); padding: 4px 8px; border-radius: 20px; vertical-align: middle; }
-    .color-dot { width: 16px; height: 16px; border-radius: 50%; cursor: pointer; border: 1px solid rgba(255,255,255,0.3); transition: transform 0.2s; display: inline-block;}
-    .color-dot:hover { transform: scale(1.3); border-color: white; }
-    
+    /* TOOLBAR BUTTONS */
+    .btn-tool {
+        background: transparent;           
+        border: 1px solid #555;
+        color: var(--text-color);            
+        padding: 4px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.75rem;
+        transition: all 0.2s ease;
+        margin-right: 5px;
+    }
+    .btn-tool:hover { background: rgba(255, 255, 255, 0.05); }
+
     /* Ensure highlights look good */
     span[style*="background-color"] { border-radius: 2px; padding: 0 2px; }
     strike, s, del { text-decoration: line-through; opacity: 0.8; } /* Removed fixed red color */
@@ -750,25 +769,9 @@ function openExplanationInTab(fullExplanation, qNum) {
             <div class="toolbar-group">
                 <div id="editTools" class="hidden toolbar-group" style="align-items:center;">
                     
-                    <div style="display:inline-flex; align-items:center;">
-                        <button class="btn btn-tool" onclick="togglePalette('strikePalette')" title="Strikethrough"><s>A</s> ▼</button>
-                        <div id="strikePalette" class="palette-container hidden">
-                            <span class="color-dot" style="background:#ef4444" onclick="applyColorStrike('#ef4444')"></span>
-                            <span class="color-dot" style="background:#94a3b8" onclick="applyColorStrike('#94a3b8')"></span>
-                            <span class="color-dot" style="background:#3b82f6" onclick="applyColorStrike('#3b82f6')"></span>
-                        </div>
-                    </div>
-
-                    <div style="display:inline-flex; align-items:center;">
-                        <button class="btn btn-tool" onclick="togglePalette('hilitePalette')" title="Highlight">🖊 ▼</button>
-                        <div id="hilitePalette" class="palette-container hidden">
-                            <span class="color-dot" style="background:rgba(255,255,0,0.4)" onclick="applyColorHilite('rgba(255,255,0,0.4)')"></span>
-                            <span class="color-dot" style="background:rgba(74,222,128,0.4)" onclick="applyColorHilite('rgba(74,222,128,0.4)')"></span>
-                            <span class="color-dot" style="background:rgba(96,165,250,0.4)" onclick="applyColorHilite('rgba(96,165,250,0.4)')"></span>
-                            <span class="color-dot" style="background:rgba(244,114,182,0.4)" onclick="applyColorHilite('rgba(244,114,182,0.4)')"></span>
-                        </div>
-                    </div>
-
+                    <button class="btn btn-tool" onclick="applyStrike()" title="Strikethrough"><s>S</s></button>
+                    <button class="btn btn-tool" onclick="applyHighlight()" title="Highlight (Acts Style)">🖊</button>
+                    
                     <button class="btn btn-save" onclick="saveChildChanges()">✅ Save</button>
                 </div>
                 
@@ -804,24 +807,16 @@ function openExplanationInTab(fullExplanation, qNum) {
             }
         }
 
-        function togglePalette(id) {
-            const p = document.getElementById(id);
-            const isHidden = p.classList.contains('hidden');
-            // Close others
-            document.querySelectorAll('.palette-container').forEach(el => el.classList.add('hidden'));
-            if (isHidden) p.classList.remove('hidden');
-        }
-
-        function applyColorHilite(color) {
-            if (!document.execCommand('hiliteColor', false, color)) {
-                document.execCommand('backColor', false, color);
-            }
+        // 1. MONOCHROME STRIKETHROUGH (CHILD)
+        function applyStrike() {
+            document.execCommand('strikeThrough', false, null);
             document.getElementById('editable-content').focus();
         }
 
-        function applyColorStrike(color) {
-            document.execCommand('strikeThrough', false, null);
-            document.execCommand('foreColor', false, color);
+        // 2. HIGHLIGHT (ACTS STYLE CHILD)
+        function applyHighlight() {
+            document.execCommand('bold', false, null);
+            document.execCommand('foreColor', false, '#818cf8');
             document.getElementById('editable-content').focus();
         }
 
@@ -1309,50 +1304,18 @@ function toggleExplanationEdit() {
     }
 }
 
+// 1. MONOCHROME STRIKETHROUGH
+// Just executes standard strikethrough (inherits text color)
 function applyStrike() {
-    // Native command: Toggles strikethrough on selected text
     document.execCommand('strikeThrough', false, null);
-    document.getElementById("feedbackBody").focus(); // Keep focus
+    document.getElementById("feedbackBody").focus(); 
 }
 
+// 2. HIGHLIGHT (ACTS STYLE)
+// Applies #818cf8 Color + Bold (mimics existing Acts logic)
 function applyHighlight() {
-    // Use semi-transparent yellow so white text (Dark Mode) is still readable
-    const highlightColor = "rgba(255, 255, 0, 0.25)";
-    
-    // Try standard 'hiliteColor' first, fallback to 'backColor' if needed
-    if (!document.execCommand('hiliteColor', false, highlightColor)) {
-        document.execCommand('backColor', false, highlightColor); 
-    }
-    
-    document.getElementById("feedbackBody").focus(); // Keep focus for typing
-}
-
-/* --- NEW COLOR PALETTE LOGIC --- */
-function togglePalette(id) {
-    const p = document.getElementById(id);
-    const isHidden = p.classList.contains('hidden');
-    
-    // Close all other palettes first to avoid clutter
-    document.querySelectorAll('.palette-container').forEach(el => el.classList.add('hidden'));
-    
-    if (isHidden) p.classList.remove('hidden');
-    else p.classList.add('hidden');
-}
-
-function applyColorHilite(color) {
-    if (!document.execCommand('hiliteColor', false, color)) {
-        document.execCommand('backColor', false, color);
-    }
-    document.getElementById("feedbackBody").focus();
-}
-
-function applyColorStrike(color) {
-    // 1. Apply the Strikethrough
-    document.execCommand('strikeThrough', false, null);
-    
-    // 2. Apply the Color (ForeColor affects the text and line in most browsers)
-    document.execCommand('foreColor', false, color);
-    
+    document.execCommand('bold', false, null);
+    document.execCommand('foreColor', false, '#818cf8');
     document.getElementById("feedbackBody").focus();
 }
 
