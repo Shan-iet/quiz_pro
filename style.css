@@ -443,6 +443,7 @@ input[type="file"] { display: none; }
 strike, s, del {
     /* REMOVE global color so inline styles can work */
     /* color: var(--danger); */ 
+    color: red !important;
     text-decoration: line-through;
     opacity: 0.8;
 }

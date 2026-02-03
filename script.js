@@ -153,11 +153,22 @@ function startNewSession() {
                 else if (json.questions && Array.isArray(json.questions)) rawList = json.questions;
                 else if (json.data && Array.isArray(json.data)) rawList = json.data;
                 
+                // --- MODIFIED BLOCK START ---
+                
+                // 1. Capture the universal 'section' key from the file root (if it exists)
                 const rootSection = json.section || null;
+                
+                // 2. Capture the filename base
                 const fileNameBase = file.name.replace(/\.[^/.]+$/, ""); 
 
                 const formatted = rawList.map(q => {
+                    // 3. PRIORITY ASSIGNMENT:
+                    // First check 'q.section' (per question)
+                    // Then check 'rootSection' (universal file key)
+                    // Finally fallback to 'fileNameBase'
                     let rawSection = q.section || rootSection || fileNameBase;
+
+                // --- MODIFIED BLOCK END ---
 
                     if (rawSection && typeof rawSection === 'string') {
                         const parts = rawSection.split(/[\s_-]+/).filter(Boolean);
